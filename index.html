@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>OsakaGo - 오사카 여행 일본어 번역기 & 길찾기 지도 & 맛집 가이드</title>
+  
+  <!-- Pretendard 모던 폰트 -->
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  
+  <!-- Leaflet 지도 CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  
+  <!-- 앱 스타일시트 -->
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐙</text></svg>">
+</head>
+<body>
+
+  <!-- 메인 모바일 앱 컨테이너 -->
+  <div class="app-container">
+    
+    <!-- 1. 앱 헤더 -->
+    <header class="app-header">
+      <div class="header-badge">
+        <span>🇯🇵</span>
+        <span>OSAKA TRAVEL COMPANION</span>
+      </div>
+      <div class="header-title-row">
+        <div>
+          <h1 class="header-title">
+            <span>OsakaGo</span>
+            <span style="font-size: 20px;">🐙</span>
+          </h1>
+          <p class="header-subtitle">오사카 여행 번역기 · 음성 길찾기 · 현지 맛집</p>
+        </div>
+        <span class="header-subbadge">오사카 가이드</span>
+      </div>
+    </header>
+
+    <!-- 2. 메인 콘텐츠 영역 -->
+    <main class="content-wrapper">
+
+      <!-- ================= TAB 1: 실시간 양방향 번역기 ================= -->
+      <section id="pane-translate" class="tab-pane active">
+        
+        <!-- 언어 선택 및 전환 바 -->
+        <div class="lang-selector-bar">
+          <div class="lang-pill" id="src-lang-label">🇰🇷 한국어</div>
+          <button class="lang-swap-btn" id="swap-lang-btn" title="언어 방향 바꾸기">
+            ⇄
+          </button>
+          <div class="lang-pill" id="tgt-lang-label">🇯🇵 日本語</div>
+        </div>
+
+        <!-- 실시간 양방향 대화 통역 (내가 말하기 & 상대방 일본어 답변 듣기) -->
+        <div class="dual-talk-card">
+          <div class="dual-talk-header">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span class="dual-badge">🔄 양방향 실시간 통역</span>
+              <span class="dual-tip-badge">티키타카 대화</span>
+            </div>
+            <span class="dual-subinfo">내가 말하고 ➔ 상대방 답변까지 한국어로 듣기!</span>
+          </div>
+
+          <div class="dual-btn-grid">
+            <!-- 1. 내가 한국어로 말하기 -->
+            <button class="dual-btn ko" id="dual-speak-ko-btn" title="한국어로 말하면 일본어로 번역되어 상대방에게 소리로 들려줍니다">
+              <div class="dual-icon-circle">🇰🇷 ➔ 🇯🇵</div>
+              <div class="dual-btn-label">내가 한국어로 말하기</div>
+              <div class="dual-btn-status" id="dual-ko-status">터치하여 말하기</div>
+            </button>
+
+            <!-- 2. 상대방 일본어로 답변 듣기 -->
+            <button class="dual-btn ja" id="dual-listen-ja-btn" title="상대방이 일본어로 말하면 한국어로 번역되어 나에게 소리로 들려줍니다">
+              <div class="dual-icon-circle">🇯🇵 ➔ 🇰🇷</div>
+              <div class="dual-btn-label">상대방 일본어로 답변 듣기</div>
+              <div class="dual-btn-status" id="dual-ja-status">터치하여 답변 듣기</div>
+            </button>
+          </div>
+
+          <!-- 자동 핑퐁 (티키타카 대화) 모드 토글 -->
+          <div class="pingpong-option-row">
+            <label class="pingpong-check-label" title="내 말이 끝나면 자동으로 상대방 일본어 답변 대기로 전환됩니다">
+              <input type="checkbox" id="auto-pingpong-check" checked>
+              <span>🔄 <strong>자동 티키타카 모드:</strong> 내가 말한 뒤 자동으로 상대방 답변 대기로 전환</span>
+            </label>
+          </div>
+
+          <!-- 실시간 청취 상태 안내 배너 -->
+          <div class="dual-live-banner" id="dual-live-banner" style="display: none;">
+            <span class="live-pulse-dot"></span>
+            <span id="dual-live-banner-text">한국어로 말씀하세요... (손 떼고 편하게 말씀하세요)</span>
+            <button class="dual-stop-btn" id="dual-stop-btn">중단</button>
+          </div>
+        </div>
+
+        <!-- 번역 입력 카드 (직접 입력도 가능) -->
+        <div class="trans-card">
+          <textarea 
+            id="source-text" 
+            class="trans-input" 
+            placeholder="번역할 한국어나 일본어를 입력하세요.&#10;(예: 도톤보리 맛집 추천해주세요, 와사비 빼주세요)"
+          ></textarea>
+
+          <div class="card-actions">
+            <div class="action-btn-group">
+              <button class="icon-btn" id="clear-text-btn" title="지우기">
+                <span>✕</span> 지우기
+              </button>
+              <button class="icon-btn mic-btn" id="mic-btn" title="음성으로 말하기">
+                <span>🎤</span> 음성입력
+              </button>
+            </div>
+            <div style="font-size: 11px; color: #94A3B8;">Enter 키로 번역</div>
+          </div>
+        </div>
+
+        <!-- 번역 옵션 바 (자동 음성 읽기 토글) -->
+        <div class="trans-option-bar">
+          <label class="auto-speak-toggle" title="번역 완료 시 자동으로 일본어 발음을 읽어줍니다">
+            <input type="checkbox" id="auto-speak-check" checked>
+            <span>번역 즉시 일본어 발음 자동 재생 🔊</span>
+          </label>
+        </div>
+
+        <!-- 번역 실행 버튼 -->
+        <button class="translate-main-btn" id="translate-btn">
+          <span>⚡</span>
+          <span>지금 바로 번역하기</span>
+        </button>
+
+        <!-- 번역 결과 카드 -->
+        <div class="result-card" id="result-card">
+          <div class="result-header">
+            <span class="result-tag" id="result-lang-tag">🇯🇵 日本語</span>
+            <div class="action-btn-group">
+              <button class="icon-btn primary" id="speak-result-btn" title="현지 발음 듣기">
+                <span>🔊</span> 소리 듣기
+              </button>
+              <button class="icon-btn" id="copy-result-btn" title="복사하기">
+                <span>📋</span> 복사
+              </button>
+            </div>
+          </div>
+
+          <!-- 일본어/한국어 결과 원문 -->
+          <div class="result-text" id="target-text">번역 결과가 여기에 표시됩니다.</div>
+          
+          <!-- 크고 선명한 한글 발음(따라 읽기) 상자 -->
+          <div class="pronounce-box" id="pronounce-box" style="display: none;">
+            <div class="pronounce-label-row">
+              <span class="pronounce-badge">🗣️ 한글 발음 (따라 읽기)</span>
+              <button class="pronounce-repeat-btn" id="repeat-speak-btn" title="일본어 발음 다시 듣기">
+                <span>🔊</span> 다시 듣기
+              </button>
+            </div>
+            <div class="pronounce-text" id="target-reading"></div>
+          </div>
+
+          <!-- 현지인에게 크게 보여주기 버튼 -->
+          <div style="margin-top: 14px; text-align: right;">
+            <button class="big-show-btn" id="show-fullscreen-btn">
+              <span>📱</span>
+              <span>현지인에게 크게 보여주기</span>
+            </button>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ================= TAB 2: 음성 길찾기 & 지도 ================= -->
+      <section id="pane-map" class="tab-pane">
+        
+        <!-- 음성 목적지 검색창 -->
+        <div class="map-search-card">
+          <div class="map-search-bar">
+            <span style="font-size: 18px;">📍</span>
+            <input 
+              type="text" 
+              id="map-search-input" 
+              class="map-search-input" 
+              placeholder="가고 싶은 곳을 말하거나 입력하세요 (예: 도톤보리, 유니버설)"
+            >
+            <button class="map-mic-btn" id="map-mic-btn" title="음성으로 목적지 말하기">
+              <span>🎤</span>
+            </button>
+            <button class="map-search-btn" id="map-search-btn">
+              검색
+            </button>
+          </div>
+
+          <!-- 자주 찾는 명소 빠른 칩 -->
+          <div class="quick-places-scroll">
+            <button class="quick-chip" data-name="도톤보리">글리코상(도톤보리)</button>
+            <button class="quick-chip" data-name="유니버설 스튜디오 재팬">USJ 유니버설</button>
+            <button class="quick-chip" data-name="오사카성">오사카성</button>
+            <button class="quick-chip" data-name="우메다 스카이빌딩">우메다 공중정원</button>
+            <button class="quick-chip" data-name="신세카이 츠텐카쿠">신세카이</button>
+            <button class="quick-chip" data-name="난바역">난바역</button>
+            <button class="quick-chip" data-name="간사이 국제공항">간사이공항</button>
+          </div>
+        </div>
+
+        <!-- 지도 뷰포트 -->
+        <div class="map-wrapper">
+          <div id="map-container"></div>
+          <!-- 내 위치 찾기 플로팅 버튼 -->
+          <button class="my-location-btn" id="my-location-btn" title="내 위치 찾기">
+            🧭 내 위치
+          </button>
+        </div>
+
+        <!-- 선택된 목적지 길찾기 정보 카드 -->
+        <div class="dest-info-card" id="dest-info-card">
+          <div class="dest-header">
+            <div>
+              <span class="dest-badge" id="dest-category">명소</span>
+              <h3 class="dest-title" id="dest-name-ko">목적지를 선택하세요</h3>
+              <p class="dest-name-ja" id="dest-name-ja">目的地を選択してください</p>
+            </div>
+            <button class="icon-btn primary" id="dest-speak-btn" title="일본어 발음 듣기">
+              🔊 발음
+            </button>
+          </div>
+
+          <p class="dest-desc" id="dest-desc">
+            위 검색창에 음성으로 말하거나, 지도 위의 핀을 누르면 실시간 길찾기(도보/지하철)가 시작됩니다.
+          </p>
+
+          <!-- 길찾기 액션 버튼 그룹 -->
+          <div class="dest-btn-group">
+            <a href="#" target="_blank" class="nav-action-btn transit" id="google-transit-btn">
+              <span>🚇</span>
+              <span>구글 전철 길찾기</span>
+            </a>
+            <a href="#" target="_blank" class="nav-action-btn walk" id="google-walk-btn">
+              <span>🚶</span>
+              <span>도보 길찾기</span>
+            </a>
+            <button class="nav-action-btn taxi" id="dest-show-modal-btn">
+              <span>🚕</span>
+              <span>기사님께 보여주기</span>
+            </button>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ================= TAB 3: 오사카 대표 맛집 큐레이션 ================= -->
+      <section id="pane-food" class="tab-pane">
+        
+        <!-- 맛집 카테고리 필터 -->
+        <div class="category-scroll">
+          <button class="food-cat-chip active" data-cat="all">전체보기</button>
+          <button class="food-cat-chip" data-cat="takoyaki">🐙 타코야키</button>
+          <button class="food-cat-chip" data-cat="okonomiyaki">🥞 오코노미야키</button>
+          <button class="food-cat-chip" data-cat="ramen">🍜 라멘·우동</button>
+          <button class="food-cat-chip" data-cat="kushikatsu">🍢 쿠시카츠</button>
+          <button class="food-cat-chip" data-cat="beef">🥩 규카츠·야키니쿠</button>
+          <button class="food-cat-chip" data-cat="sushi">🍣 스시·해산물</button>
+          <button class="food-cat-chip" data-cat="dessert">🍰 디저트·카페</button>
+        </div>
+
+        <div style="background: #FEF2F2; border: 1px solid #FECDD3; border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; font-size: 12px; color: #9F1239;">
+          😋 <strong>오사카 식도락 팁</strong>: <strong>[📍 지도에서 보기]</strong>를 누르면 지도 위치로 이동하며, <strong>[🧭 구글 길찾기]</strong>로 최적 경로를 바로 찾을 수 있습니다!
+        </div>
+
+        <!-- 맛집 카드 리스트 컨테이너 -->
+        <div id="food-list-container">
+          <!-- JS 렌더링 -->
+        </div>
+
+      </section>
+
+      <!-- ================= TAB 4: 여행 필수 회화집 ================= -->
+      <section id="pane-phrases" class="tab-pane">
+        
+        <!-- 카테고리 스크롤 칩 -->
+        <div class="category-scroll">
+          <button class="cat-chip active" data-cat="all">전체보기</button>
+          <button class="cat-chip" data-cat="restaurant">🍽️ 식당·주문</button>
+          <button class="cat-chip" data-cat="transport">🚇 지하철·교통</button>
+          <button class="cat-chip" data-cat="shopping">🛍️ 쇼핑·면세</button>
+          <button class="cat-chip" data-cat="hotel">🏨 호텔·숙소</button>
+          <button class="cat-chip" data-cat="emergency">🚨 긴급·약국</button>
+          <button class="cat-chip" data-cat="osaka" style="border-color: #F59E0B; color: #D97706;">🐙 오사카 사투리!</button>
+        </div>
+
+        <!-- 안내 배너 -->
+        <div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; font-size: 12px; color: #92400E;">
+          💡 <strong>현지 꿀팁</strong>: <strong>[🔊 듣기]</strong>를 누르면 일본어로 말해주고, <strong>[📱 보여주기]</strong>를 누르면 점원에게 화면을 크게 보여줄 수 있습니다!
+        </div>
+
+        <!-- 회화 리스트 컨테이너 -->
+        <div id="phrases-container">
+          <!-- JS 렌더링 -->
+        </div>
+
+      </section>
+
+      <!-- ================= TAB 5: 4박 5일 코스 & 여행 꿀팁 ================= -->
+      <section id="pane-plans" class="tab-pane">
+        
+        <!-- 일차 선택기 (Day 1 ~ Day 5) -->
+        <div class="day-selector">
+          <button class="day-btn active" data-day="1">Day 1<span>입국·난바</span></button>
+          <button class="day-btn" data-day="2">Day 2<span>USJ 유니버설</span></button>
+          <button class="day-btn" data-day="3">Day 3<span>교토 당일치기</span></button>
+          <button class="day-btn" data-day="4">Day 4<span>오사카성·쇼핑</span></button>
+          <button class="day-btn" data-day="5">Day 5<span>출국·면세</span></button>
+        </div>
+
+        <!-- 선택된 일차 헤더 정보 -->
+        <div class="day-header-card">
+          <div class="day-title" id="day-header-title">Day 1: 오사카 입국 & 난바/도톤보리 첫날</div>
+          <div class="day-desc" id="day-header-desc">간사이 공항에서 난바로 이동 후 활기찬 오사카의 밤거리 즐기기</div>
+        </div>
+
+        <!-- 일정 체크리스트 -->
+        <div id="plan-items-list">
+          <!-- JS 렌더링 -->
+        </div>
+
+        <!-- 나만의 일정 추가 박스 -->
+        <div class="add-plan-box">
+          <input 
+            type="text" 
+            id="new-plan-input" 
+            class="add-plan-input" 
+            placeholder="가고 싶은 맛집이나 장소 추가 (예: 헵파이브 관람차)"
+          >
+          <button class="add-plan-btn" id="add-plan-btn">+ 추가</button>
+        </div>
+
+        <!-- 여행 꿀팁 섹션 접이식/카드 -->
+        <div class="section-title-row" style="margin-top: 24px;">
+          <h3 class="section-title">
+            <span>💡</span>
+            <span>오사카 필수 여행 팁 & 비상연락망</span>
+          </h3>
+        </div>
+
+        <div class="tip-card">
+          <div class="tip-title">🚆 간사이 공항 ➔ 난바역 이동 팁</div>
+          <div class="tip-text">
+            • <strong>라피트(Rapi:t) 특급열차</strong>: 난바역까지 38분 직통, 전좌석 지정석 (가장 추천!)<br>
+            • <strong>공항급행(난카이선)</strong>: 약 45분 소요, 라피트 매진 시 대안으로 훌륭함
+          </div>
+        </div>
+
+        <div class="tip-card">
+          <div class="tip-title">💳 교통카드 & 결제 수단</div>
+          <div class="tip-text">
+            • <strong>이코카(ICOCA) / 스이카</strong>: 오사카 모든 지하철, 버스, 편의점 및 자판기 결제 가능<br>
+            • <strong>트래블로그 / 트래블월렛</strong>: 세븐일레븐 ATM에서 엔화 수수료 무료 인출 가능
+          </div>
+        </div>
+
+        <div class="tip-card" style="border-color: #FECDD3; background: #FFF1F2;">
+          <div class="tip-title" style="color: #BE123C;">🚨 긴급 상황 비상연락처</div>
+          <div class="tip-text" style="color: #9F1239;">
+            • <strong>경찰 신고</strong>: 국번 없이 <strong>110</strong><br>
+            • <strong>구급차 / 화재</strong>: 국번 없이 <strong>119</strong><br>
+            • <strong>주 오사카 대한민국 총영사관</strong>: +81-6-4256-2345<br>
+            • <strong>영사콜센터 (24시간 한국어)</strong>: +82-2-3210-0404
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+
+    <!-- 3. 하단 5개 탭 내비게이션 바 -->
+    <nav class="bottom-nav">
+      <button class="nav-item active" data-tab="translate">
+        <span class="icon">🔤</span>
+        <span class="label">번역기</span>
+      </button>
+      <button class="nav-item" data-tab="map">
+        <span class="icon">🗺️</span>
+        <span class="label">길찾기·지도</span>
+      </button>
+      <button class="nav-item" data-tab="food">
+        <span class="icon">🍽️</span>
+        <span class="label">맛집추천</span>
+      </button>
+      <button class="nav-item" data-tab="phrases">
+        <span class="icon">🗣️</span>
+        <span class="label">여행회화</span>
+      </button>
+      <button class="nav-item" data-tab="plans">
+        <span class="icon">🗓️</span>
+        <span class="label">4박5일코스</span>
+      </button>
+    </nav>
+
+  </div>
+
+  <!-- 4. 전체화면 쇼잉 모달 (현지인/기사님께 크게 폰 보여주기) -->
+  <div class="modal-overlay" id="showing-modal">
+    <div class="showing-card">
+      <span class="showing-badge">📱 현지인에게 보여주세요</span>
+      <div class="showing-japanese" id="modal-ja-text">これをお願いします。</div>
+      <div class="showing-reading" id="modal-reading-text">[발음] 고레오 오네가이시마스</div>
+      <div class="showing-korean" id="modal-ko-text">이것으로 주세요.</div>
+      
+      <div class="showing-btn-row">
+        <button class="modal-speak-btn" id="modal-speak-btn">
+          <span>🔊</span> 소리로 들려주기
+        </button>
+        <button class="modal-close-btn" id="modal-close-btn">
+          닫기
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4-1. 실시간 동시 대화 통역 모달 -->
+  <div class="modal-overlay" id="live-dialog-modal">
+    <div class="live-dialog-card">
+      <div class="live-dialog-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="live-dot"></span>
+          <strong style="font-size: 16px; color: #0F172A;">실시간 동시 대화 통역</strong>
+        </div>
+        <button class="dialog-close-btn" id="live-dialog-close-btn">✕</button>
+      </div>
+
+      <div class="dialog-stream" id="dialog-stream">
+        <div class="dialog-notice">
+          아래 마이크를 누르고 말씀하시면 실시간으로 통역되어 상대방에게 소리로 전달됩니다.
+        </div>
+      </div>
+
+      <div class="dialog-controls">
+        <button class="dialog-talk-btn ko" id="dialog-mic-ko-btn">
+          <span class="talk-icon">🇰🇷</span>
+          <span class="talk-text">내가 한국어로 말하기</span>
+        </button>
+        <button class="dialog-talk-btn ja" id="dialog-mic-ja-btn">
+          <span class="talk-icon">🇯🇵</span>
+          <span class="talk-text">상대방이 일본어로 말하기</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. 토스트 알림 -->
+  <div class="toast-msg" id="toast-msg">알림 메시지</div>
+
+  <!-- Leaflet 지도 JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <!-- 메인 앱 스크립트 연결 -->
+  <script src="app.js"></script>
+</body>
+</html>
