@@ -1889,26 +1889,29 @@ function addHistoryItem(sourceText, targetText, sl, tl) {
 }
 
 // ==========================================
-// 4. 원터치 실시간 음성 통역 엔진 (OsakaGo Voice Direct)
+// 4. 한·일 실시간 양방향 음성 통역 엔진 (OsakaGo Voice Direct Dual)
 // ==========================================
-let simpleVoiceRec = null;
-let isSimpleVoiceActive = false;
-let simpleVoiceBuffer = '';
-let simpleSilenceTimer = null;
-let isTranslatingVoice = false;
-let lastTranslatedJapanese = '';
-let lastOriginalKorean = '';
+let voiceTurnRec = null;
+let activeVoiceSpeaker = null; // 'ko' | 'ja' | null
+let voiceTurnBuffer = '';
+let voiceSilenceTimer = null;
+let isTranslatingVoiceTurn = false;
+let lastTranslatedText = '';
+let lastTranslatedLang = 'ja';
+let lastOriginalText = '';
 let lastPronunciationText = '';
 
-function toggleSimpleVoice() {
-  if (isSimpleVoiceActive) {
-    stopSimpleVoice(true);
+function toggleVoiceSpeaker(speakerLang) {
+  if (activeVoiceSpeaker === speakerLang) {
+    // 이미 이 언어로 듣는 중이면 즉시 종료 및 번역
+    stopVoiceTurn(true);
   } else {
-    startSimpleVoice();
+    // 다른 언어가 켜져 있으면 끄고 새 언어 시작
+    startVoiceTurn(speakerLang);
   }
 }
 
-function startSimpleVoice() {
+function startVoiceTurn(speakerLang) {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
     showToast('⚠️ 현재 브라우저에서는 음성 인식을 지원하지 않습니다. Chrome 앱으로 접속해 주세요.');
@@ -1918,44 +1921,60 @@ function startSimpleVoice() {
   // 모바일 오디오 재생 락 즉시 사전 해제 (Autoplay Policy 필수 하네스)
   unlockAudio();
 
-  // 이전 세션 정리
-  if (simpleVoiceRec) {
-    try { simpleVoiceRec.abort(); } catch(e) {}
-    simpleVoiceRec = null;
+  // 기존 세션 정리
+  if (voiceTurnRec) {
+    try { voiceTurnRec.abort(); } catch(e) {}
+    voiceTurnRec = null;
   }
-  if (simpleSilenceTimer) {
-    clearTimeout(simpleSilenceTimer);
-    simpleSilenceTimer = null;
+  if (voiceSilenceTimer) {
+    clearTimeout(voiceSilenceTimer);
+    voiceSilenceTimer = null;
   }
 
-  simpleVoiceBuffer = '';
-  isSimpleVoiceActive = true;
-  isTranslatingVoice = false;
+  voiceTurnBuffer = '';
+  activeVoiceSpeaker = speakerLang;
+  isTranslatingVoiceTurn = false;
 
-  // UI 상태: 녹음 중
-  const mainBtn = document.getElementById('voice-main-btn');
-  const micIcon = document.getElementById('voice-mic-icon');
-  const btnLabel = document.getElementById('voice-btn-label');
-  const btnStatus = document.getElementById('voice-btn-status');
+  const koBtn = document.getElementById('voice-speak-ko-btn');
+  const jaBtn = document.getElementById('voice-listen-ja-btn');
+  const koIcon = document.getElementById('voice-ko-mic-icon');
+  const jaIcon = document.getElementById('voice-ja-mic-icon');
+  const koStatus = document.getElementById('voice-ko-status');
+  const jaStatus = document.getElementById('voice-ja-status');
   const streamBox = document.getElementById('voice-stream-box');
   const streamText = document.getElementById('voice-stream-text');
 
-  if (mainBtn) mainBtn.classList.add('active');
-  if (micIcon) micIcon.innerText = '⏹️';
-  if (btnLabel) btnLabel.innerText = '듣고 있습니다... 말씀하세요!';
-  if (btnStatus) btnStatus.innerText = '말씀이 끝나면 자동 번역됩니다 (터치하면 즉시 번역)';
   if (streamBox) streamBox.style.display = 'block';
-  if (streamText) streamText.innerText = '🎙️ 한국어로 편하게 말씀하세요...';
+
+  if (speakerLang === 'ko') {
+    if (koBtn) koBtn.classList.add('active');
+    if (jaBtn) jaBtn.classList.remove('active');
+    if (koIcon) koIcon.innerText = '⏹️';
+    if (jaIcon) jaIcon.innerText = '🇯🇵';
+    if (koStatus) koStatus.innerText = '듣고 있습니다... 말씀하세요! (터치 시 즉시 번역)';
+    if (jaStatus) jaStatus.innerText = '대기 중';
+    if (streamText) streamText.innerText = '🎙️ [한국어로 말씀하세요] 듣고 있습니다...';
+    showToast('🎙️ [한국어로 말씀하세요] 듣고 있습니다...');
+  } else {
+    if (jaBtn) jaBtn.classList.add('active');
+    if (koBtn) koBtn.classList.remove('active');
+    if (jaIcon) jaIcon.innerText = '⏹️';
+    if (koIcon) koIcon.innerText = '🇰🇷';
+    if (jaStatus) jaStatus.innerText = '日本語を聞いています... (터치 시 즉시 번역)';
+    if (koStatus) koStatus.innerText = '대기 중';
+    if (streamText) streamText.innerText = '👂 [일본인 상대방 답변] 듣고 있습니다...';
+    showToast('👂 [일본어 듣는 중] 일본인 상대방에게 폰을 대주세요...');
+  }
 
   try {
     const rec = new SpeechRecognition();
-    simpleVoiceRec = rec;
-    rec.lang = 'ko-KR';
+    voiceTurnRec = rec;
+    rec.lang = speakerLang === 'ko' ? 'ko-KR' : 'ja-JP';
     rec.continuous = false;
-    rec.interimResults = true; // 레이스 컨디션 차단 및 실시간 피드백
+    rec.interimResults = true;
 
     rec.onstart = () => {
-      isSimpleVoiceActive = true;
+      // 시작 확인
     };
 
     rec.onresult = (event) => {
@@ -1972,13 +1991,13 @@ function startSimpleVoice() {
 
       const currentSpoken = (finalTranscript || interim).trim();
       if (currentSpoken) {
-        simpleVoiceBuffer = currentSpoken;
+        voiceTurnBuffer = currentSpoken;
         if (streamText) streamText.innerText = `🗣️ "${currentSpoken}"`;
 
-        // 묵음 감지 타이머 (850ms 동안 말이 멈추면 자동 번역 & 음성 출력)
-        if (simpleSilenceTimer) clearTimeout(simpleSilenceTimer);
-        simpleSilenceTimer = setTimeout(() => {
-          stopSimpleVoice(true);
+        // 묵음 감지 타이머 (850ms 동안 말이 멈추면 자동 번역)
+        if (voiceSilenceTimer) clearTimeout(voiceSilenceTimer);
+        voiceSilenceTimer = setTimeout(() => {
+          stopVoiceTurn(true);
         }, 850);
       }
     };
@@ -1988,15 +2007,15 @@ function startSimpleVoice() {
       if (err.error === 'not-allowed') {
         showToast('⚠️ 마이크 권한이 차단되었습니다. 주소창 설정에서 마이크를 허용해 주세요.');
       }
-      resetSimpleVoiceUI();
+      resetVoiceTurnUI();
     };
 
     rec.onend = () => {
-      if (isSimpleVoiceActive) {
-        if (simpleVoiceBuffer && !isTranslatingVoice) {
-          stopSimpleVoice(true);
+      if (activeVoiceSpeaker) {
+        if (voiceTurnBuffer && !isTranslatingVoiceTurn) {
+          stopVoiceTurn(true);
         } else {
-          resetSimpleVoiceUI();
+          resetVoiceTurnUI();
         }
       }
     };
@@ -2004,66 +2023,74 @@ function startSimpleVoice() {
     rec.start();
   } catch (err) {
     console.error('STT Start Error:', err);
-    resetSimpleVoiceUI();
+    resetVoiceTurnUI();
     showToast('마이크를 시작할 수 없습니다.');
   }
 }
 
-function stopSimpleVoice(doTranslate = false) {
-  if (simpleSilenceTimer) {
-    clearTimeout(simpleSilenceTimer);
-    simpleSilenceTimer = null;
+function stopVoiceTurn(doTranslate = false) {
+  if (voiceSilenceTimer) {
+    clearTimeout(voiceSilenceTimer);
+    voiceSilenceTimer = null;
   }
-  const textToTranslate = simpleVoiceBuffer.trim();
-  isSimpleVoiceActive = false;
+  const textToTranslate = voiceTurnBuffer.trim();
+  const currentSpeaker = activeVoiceSpeaker;
+  activeVoiceSpeaker = null;
 
-  if (simpleVoiceRec) {
-    try { simpleVoiceRec.stop(); } catch(e) {}
-    simpleVoiceRec = null;
+  if (voiceTurnRec) {
+    try { voiceTurnRec.stop(); } catch(e) {}
+    voiceTurnRec = null;
   }
 
-  resetSimpleVoiceUI();
+  resetVoiceTurnUI();
 
-  if (doTranslate && textToTranslate) {
-    triggerSimpleVoiceTranslate(textToTranslate);
+  if (doTranslate && textToTranslate && currentSpeaker) {
+    triggerVoiceTranslate(textToTranslate, currentSpeaker);
   }
 }
 
-function resetSimpleVoiceUI() {
-  isSimpleVoiceActive = false;
-  const mainBtn = document.getElementById('voice-main-btn');
-  const micIcon = document.getElementById('voice-mic-icon');
-  const btnLabel = document.getElementById('voice-btn-label');
-  const btnStatus = document.getElementById('voice-btn-status');
+function resetVoiceTurnUI() {
+  activeVoiceSpeaker = null;
+  const koBtn = document.getElementById('voice-speak-ko-btn');
+  const jaBtn = document.getElementById('voice-listen-ja-btn');
+  const koIcon = document.getElementById('voice-ko-mic-icon');
+  const jaIcon = document.getElementById('voice-ja-mic-icon');
+  const koStatus = document.getElementById('voice-ko-status');
+  const jaStatus = document.getElementById('voice-ja-status');
 
-  if (mainBtn) mainBtn.classList.remove('active');
-  if (micIcon) micIcon.innerText = '🎙️';
-  if (btnLabel) btnLabel.innerText = '한국어로 말하기';
-  if (btnStatus) btnStatus.innerText = '터치하고 편하게 말씀하세요 (손 떼고 말하기)';
+  if (koBtn) koBtn.classList.remove('active');
+  if (jaBtn) jaBtn.classList.remove('active');
+  if (koIcon) koIcon.innerText = '🇰🇷';
+  if (jaIcon) jaIcon.innerText = '🇯🇵';
+  if (koStatus) koStatus.innerText = '터치 후 말하기 ➔ 일본어로 소리 재생 🇯🇵';
+  if (jaStatus) jaStatus.innerText = '터치 후 일본인 말소리 ➔ 한국어로 소리 재생 🇰🇷';
 }
 
-async function triggerSimpleVoiceTranslate(text) {
-  if (!text || !text.trim() || isTranslatingVoice) return;
-  isTranslatingVoice = true;
+async function triggerVoiceTranslate(text, fromLang) {
+  if (!text || !text.trim() || isTranslatingVoiceTurn) return;
+  isTranslatingVoiceTurn = true;
 
+  const toLang = fromLang === 'ko' ? 'ja' : 'ko';
   const streamBox = document.getElementById('voice-stream-box');
   const streamText = document.getElementById('voice-stream-text');
   const resultBox = document.getElementById('voice-result-box');
+  const resultBadge = document.getElementById('voice-result-badge');
   const resOriginal = document.getElementById('voice-res-original');
   const resJapanese = document.getElementById('voice-res-japanese');
   const resReading = document.getElementById('voice-res-reading');
 
+  const destLangName = toLang === 'ja' ? '일본어' : '한국어';
   if (streamBox) streamBox.style.display = 'block';
-  if (streamText) streamText.innerText = `⏳ 번역 중입니다: "${text}"`;
+  if (streamText) streamText.innerText = `⏳ ${destLangName}로 번역 중입니다: "${text}"`;
 
-  showToast('⏳ 일본어로 번역 중입니다...');
+  showToast(`⏳ ${destLangName}로 번역 중입니다...`);
 
   let translated = '';
   let rawRomaji = '';
 
-  // 1차: Google Translate API (신속 & 정확)
+  // 1차: Google Translate single API
   try {
-    const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=ja&dt=t&dt=rm&q=${encodeURIComponent(text)}`;
+    const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${fromLang}&tl=${toLang}&dt=t&dt=rm&q=${encodeURIComponent(text)}`;
     const resp = await fetch(gUrl);
     if (resp.ok) {
       const data = await resp.json();
@@ -2086,7 +2113,7 @@ async function triggerSimpleVoiceTranslate(text) {
   // 2차 백업: MyMemory
   if (!translated) {
     try {
-      const mUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=ko|ja`;
+      const mUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${fromLang}|${toLang}`;
       const mResp = await fetch(mUrl);
       if (mResp.ok) {
         const mData = await mResp.json();
@@ -2100,41 +2127,58 @@ async function triggerSimpleVoiceTranslate(text) {
   }
 
   if (streamBox) streamBox.style.display = 'none';
-  isTranslatingVoice = false;
+  isTranslatingVoiceTurn = false;
 
   if (!translated) {
     showToast('⚠️ 번역 서버 연결 실패. 다시 말씀해 주세요.');
     return;
   }
 
-  // 일본어 한글 발음 생성
-  const pron = convertToKoreanPronunciation(translated, rawRomaji);
+  // 한국어 ➔ 일본어인 경우 한글 발음 표기 생성
+  let pron = '';
+  if (toLang === 'ja') {
+    pron = convertToKoreanPronunciation(translated, rawRomaji);
+  }
 
-  lastOriginalKorean = text;
-  lastTranslatedJapanese = translated;
+  lastOriginalText = text;
+  lastTranslatedText = translated;
+  lastTranslatedLang = toLang;
   lastPronunciationText = pron;
 
   // 화면 표시 업데이트
-  if (resOriginal) resOriginal.innerText = `🇰🇷 "${text}"`;
-  if (resJapanese) resJapanese.innerText = translated;
+  if (resultBadge) {
+    resultBadge.innerText = toLang === 'ja' ? '🇯🇵 일본어 번역 & 낭독' : '🇰🇷 한국어 번역 & 낭독';
+    resultBadge.style.color = toLang === 'ja' ? '#E11D48' : '#2563EB';
+  }
+
+  if (resOriginal) {
+    const speakerPrefix = fromLang === 'ko' ? '🇰🇷 나 (한국어)' : '🇯🇵 일본인 상대방';
+    resOriginal.innerText = `${speakerPrefix}: "${text}"`;
+  }
+
+  if (resJapanese) {
+    resJapanese.innerText = translated;
+  }
+
   if (resReading) {
-    if (pron) {
+    if (pron && toLang === 'ja') {
       resReading.innerText = `🗣️ [발음] ${pron}`;
       resReading.style.display = 'inline-block';
     } else {
       resReading.style.display = 'none';
     }
   }
+
   if (resultBox) {
     resultBox.style.display = 'block';
     resultBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
-  // 즉시 일본어 원어민 음성으로 읽어주기!
-  speakText(translated, 'ja');
+  // 즉시 해당 언어(일본어 or 한국어) 원어민 음성으로 읽어주기!
+  speakText(translated, toLang);
 
   // 기록 저장
-  addHistoryItem(text, translated, 'ko', 'ja');
+  addHistoryItem(text, translated, fromLang, toLang);
 }
 
 function handlePapagoAppLaunch(e) {
@@ -2142,7 +2186,7 @@ function handlePapagoAppLaunch(e) {
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
   if (isAndroid) {
-    // 안드로이드는 <a> 태그의 intent:// 가 기본 동작하여 설치된 진짜 파파고 앱을 즉시 실행
+    // 안드로이드는 <a> 태그의 표준 런처 인텐트가 처리하여 설치된 진짜 파파고 앱 실행
     return;
   }
 
@@ -2150,7 +2194,7 @@ function handlePapagoAppLaunch(e) {
     e.preventDefault();
     const appStoreUrl = 'https://apps.apple.com/kr/app/id1147874819';
     const now = Date.now();
-    window.location.href = 'papago://translate?sk=ko&tk=ja';
+    window.location.href = 'papago://';
     setTimeout(() => {
       if (Date.now() - now < 2200) {
         window.location.href = appStoreUrl;
@@ -2170,21 +2214,28 @@ function setupEventListeners() {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
 
-  // 원터치 음성 통역 버튼 이벤트 리스너 바인딩
-  const voiceMainBtn = document.getElementById('voice-main-btn');
-  if (voiceMainBtn) voiceMainBtn.addEventListener('click', toggleSimpleVoice);
+  // 🎙️ 양방향 음성 통역 버튼 이벤트 리스너 바인딩
+  const voiceSpeakKoBtn = document.getElementById('voice-speak-ko-btn');
+  if (voiceSpeakKoBtn) {
+    voiceSpeakKoBtn.addEventListener('click', () => toggleVoiceSpeaker('ko'));
+  }
+
+  const voiceListenJaBtn = document.getElementById('voice-listen-ja-btn');
+  if (voiceListenJaBtn) {
+    voiceListenJaBtn.addEventListener('click', () => toggleVoiceSpeaker('ja'));
+  }
 
   const voiceNowBtn = document.getElementById('voice-now-action-btn');
-  if (voiceNowBtn) voiceNowBtn.addEventListener('click', () => stopSimpleVoice(true));
+  if (voiceNowBtn) voiceNowBtn.addEventListener('click', () => stopVoiceTurn(true));
 
   const voiceRespeakBtn = document.getElementById('voice-respeak-btn');
   if (voiceRespeakBtn) {
     voiceRespeakBtn.addEventListener('click', () => {
-      if (lastTranslatedJapanese) {
+      if (lastTranslatedText) {
         unlockAudio();
-        speakText(lastTranslatedJapanese, 'ja');
+        speakText(lastTranslatedText, lastTranslatedLang);
       } else {
-        showToast('먼저 한국어로 말씀해주세요.');
+        showToast('먼저 말씀해주세요.');
       }
     });
   }
@@ -2192,10 +2243,10 @@ function setupEventListeners() {
   const voiceBigshowBtn = document.getElementById('voice-bigshow-btn');
   if (voiceBigshowBtn) {
     voiceBigshowBtn.addEventListener('click', () => {
-      if (lastTranslatedJapanese) {
-        openShowingModal(lastTranslatedJapanese, lastPronunciationText, lastOriginalKorean);
+      if (lastTranslatedText) {
+        openShowingModal(lastTranslatedText, lastPronunciationText, lastOriginalText);
       } else {
-        showToast('먼저 한국어로 말씀해주세요.');
+        showToast('먼저 말씀해주세요.');
       }
     });
   }
@@ -2207,7 +2258,8 @@ function setupEventListeners() {
     const val = voiceManualInput ? voiceManualInput.value.trim() : '';
     if (val) {
       unlockAudio();
-      triggerSimpleVoiceTranslate(val);
+      // 글자 입력은 기본 한국어 ➔ 일본어로 번역
+      triggerVoiceTranslate(val, 'ko');
       if (voiceManualInput) voiceManualInput.value = '';
     }
   }
@@ -2227,7 +2279,7 @@ function setupEventListeners() {
       const phrase = chip.dataset.text;
       if (phrase) {
         unlockAudio();
-        triggerSimpleVoiceTranslate(phrase);
+        triggerVoiceTranslate(phrase, 'ko');
       }
     });
   });
@@ -2236,6 +2288,16 @@ function setupEventListeners() {
   const papagoDirectBtn = document.getElementById('papago-direct-app-btn');
   if (papagoDirectBtn) {
     papagoDirectBtn.addEventListener('click', handlePapagoAppLaunch);
+  }
+
+  // 파파고 마켓(스토어) 버튼 iOS 자동 분기
+  const papagoMarketBtn = document.getElementById('papago-market-btn');
+  if (papagoMarketBtn) {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    if (isIOS) {
+      papagoMarketBtn.href = 'https://apps.apple.com/kr/app/id1147874819';
+      papagoMarketBtn.innerHTML = '<span>📲</span><span>2. [파파고 앱 설치하기] (App Store 이동)</span>';
+    }
   }
 
   // 지도 & 길찾기 관련

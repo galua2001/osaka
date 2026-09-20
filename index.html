@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   
   <!-- 앱 스타일시트 -->
-  <link rel="stylesheet" href="style.css?v=4.2">
+  <link rel="stylesheet" href="style.css?v=4.3">
   <link rel="icon" href="icon-192.png">
 </head>
 <body>
@@ -68,23 +68,37 @@
       <!-- ================= TAB 1: 실시간 음성 통역 & 파파고 앱 ================= -->
       <section id="pane-translate" class="tab-pane active">
 
-        <!-- 🎙️ 1. 웹앱 내 원터치 음성 말하기 카드 -->
+        <!-- 🎙️ 1. 웹앱 내 원터치 양방향 음성 통역 카드 -->
         <div class="voice-direct-card">
           <div class="voice-card-header">
-            <span class="voice-badge">🎙️ 원터치 음성 통역</span>
-            <span class="voice-subinfo">내가 한국어로 말하면 ➔ 일본어로 소리 재생!</span>
+            <span class="voice-badge">🎙️ 한·일 실시간 양방향 음성 통역</span>
+            <span class="voice-subinfo">터치 후 말하면 상대방 언어로 즉시 소리 낭독!</span>
           </div>
 
-          <!-- 큰 마이크 말하기 버튼 -->
-          <button class="voice-main-btn" id="voice-main-btn" title="터치하고 말씀하시면 즉시 일본어로 번역 및 낭독됩니다">
-            <div class="voice-mic-circle">
-              <span id="voice-mic-icon">🎙️</span>
-            </div>
-            <div class="voice-btn-texts">
-              <span class="voice-btn-label" id="voice-btn-label">한국어로 말하기</span>
-              <span class="voice-btn-status" id="voice-btn-status">터치하고 편하게 말씀하세요 (손 떼고 말하기)</span>
-            </div>
-          </button>
+          <!-- 2개의 큰 버튼: 내가 한국어로 말하기 / 상대방 일본어 듣기 -->
+          <div class="voice-dual-grid">
+            <!-- 버튼 1: 내가 말하기 (한국어 ➔ 일본어) -->
+            <button class="voice-main-btn ko-btn" id="voice-speak-ko-btn" title="터치하고 한국어로 말씀하세요">
+              <div class="voice-mic-circle">
+                <span id="voice-ko-mic-icon">🇰🇷</span>
+              </div>
+              <div class="voice-btn-texts">
+                <span class="voice-btn-label">내가 한국어로 말하기</span>
+                <span class="voice-btn-status" id="voice-ko-status">터치 후 말하기 ➔ 일본어로 소리 재생 🇯🇵</span>
+              </div>
+            </button>
+
+            <!-- 버튼 2: 상대방 듣기 (일본어 ➔ 한국어) -->
+            <button class="voice-main-btn ja-btn" id="voice-listen-ja-btn" title="터치 후 일본인 상대방에게 폰을 대주세요">
+              <div class="voice-mic-circle">
+                <span id="voice-ja-mic-icon">🇯🇵</span>
+              </div>
+              <div class="voice-btn-texts">
+                <span class="voice-btn-label">상대방(일본인) 일본어 듣기</span>
+                <span class="voice-btn-status" id="voice-ja-status">터치 후 일본인 말소리 ➔ 한국어로 소리 재생 🇰🇷</span>
+              </div>
+            </button>
+          </div>
 
           <!-- 실시간 음성 청취 모니터 -->
           <div class="voice-stream-box" id="voice-stream-box" style="display: none;">
@@ -103,7 +117,7 @@
           <!-- 번역 결과 상자 (기본 숨김, 말하면 즉시 표시) -->
           <div class="voice-result-box" id="voice-result-box" style="display: none;">
             <div class="voice-result-header">
-              <span class="result-badge">🇯🇵 일본어 번역 & 낭독</span>
+              <span class="result-badge" id="voice-result-badge">🇯🇵 일본어 번역 & 낭독</span>
               <div style="display: flex; gap: 6px;">
                 <button class="voice-sub-btn" id="voice-respeak-btn">🔊 다시 듣기</button>
                 <button class="voice-sub-btn" id="voice-bigshow-btn">📱 크게 보기</button>
@@ -130,20 +144,42 @@
           </div>
         </div>
 
-        <!-- 🦜 2. 네이버 파파고(Papago) 공식 어플(앱) 음성 대화 바로 열기 -->
+        <!-- 🦜 2. 네이버 파파고 공식 어플(앱) 및 구글 번역 카드 -->
         <div class="papago-app-launch-card">
           <div class="papago-app-header">
-            <span class="papago-app-badge">🦜 네이버 파파고 공식 어플(앱)</span>
+            <span class="papago-app-badge">🦜 네이버 파파고 공식 앱</span>
             <span class="papago-app-tag">음성 마이크 지원</span>
           </div>
-          <p class="papago-app-notice">
-            ※ 웹사이트(인터넷 창)는 네이버에서 마이크 버튼을 제공하지 않습니다.<br>
-            파파고의 <strong>마이크 음성 대화</strong>를 쓰시려면 아래 버튼을 눌러 <strong>[진짜 파파고 공식 앱]</strong>으로 열어주세요! (가운데 마이크 즉시 사용 가능)
-          </p>
-          <a href="intent://translate?sk=ko&tk=ja#Intent;package=com.naver.labs.translator;scheme=papago;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dcom.naver.labs.translator;end" class="papago-direct-app-btn" id="papago-direct-app-btn">
-            <span style="font-size: 20px;">🤖</span>
-            <span>진짜 파파고 공식 앱 열기 (음성 마이크 지원) ➔</span>
-          </a>
+
+          <!-- 마이크 미표시 원인 친절 안내 -->
+          <div class="papago-mic-guide-box">
+            <div style="font-weight: 800; color: #991B1B; margin-bottom: 4px;">⚠️ 마이크 모양이 안 보이는 이유 필독!</div>
+            <div style="font-size: 11.5px; color: #7F1D1D; line-height: 1.5;">
+              네이버 정책상 <strong>인터넷 창(모바일 웹)에서는 마이크 기능을 아예 막아두었습니다.</strong><br>
+              마이크(음성 대화)를 쓰시려면 폰에 <strong>[파파고 앱]이 설치</strong>되어 있어야 합니다.<br>
+              (※ 앱 설치가 귀찮으시면 <strong>위의 OsakaGo 자체 음성 통역(한국어/일본어 2개 버튼)</strong>을 쓰시면 설치 없이 즉시 마이크가 100% 잘 됩니다!)
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <!-- 1) 설치된 파파고 앱 직접 열기 (런처 인텐트) -->
+            <a href="intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.naver.labs.translator;end" class="papago-direct-app-btn" id="papago-direct-app-btn">
+              <span style="font-size: 20px;">🤖</span>
+              <span>1. [설치된 파파고 앱] 바로 열기 (마이크 지원) ➔</span>
+            </a>
+
+            <!-- 2) 파파고 앱 미설치 시 플레이스토어 / 앱스토어 설치 바로가기 -->
+            <a href="https://play.google.com/store/apps/details?id=com.naver.labs.translator" target="_blank" class="papago-market-btn" id="papago-market-btn">
+              <span>📲</span>
+              <span>2. [파파고 앱 설치하기] (Play스토어 이동)</span>
+            </a>
+
+            <!-- 3) 웹에서도 마이크가 지원되는 구글 번역기 링크 -->
+            <a href="https://translate.google.com/?sl=ko&tl=ja&op=translate" target="_blank" class="google-trans-web-btn">
+              <span>🌐</span>
+              <span>3. [구글 번역기 열기] (인터넷 창에서도 마이크 지원)</span>
+            </a>
+          </div>
         </div>
 
       </section>
@@ -469,7 +505,7 @@
   <!-- Leaflet 지도 JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <!-- 메인 앱 스크립트 연결 -->
-  <script src="app.js?v=4.2"></script>
+  <script src="app.js?v=4.3"></script>
 
   <!-- PWA 서비스 워커 및 앱 설치 제어 -->
   <script>

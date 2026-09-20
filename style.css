@@ -1832,10 +1832,15 @@ body {
   font-weight: 600;
 }
 
-/* 큰 마이크 말하기 메인 버튼 */
+/* 2개의 큰 마이크 대화 버튼 그리드 */
+.voice-dual-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .voice-main-btn {
   width: 100%;
-  background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
   border: none;
   border-radius: 16px;
   padding: 16px 14px;
@@ -1844,8 +1849,17 @@ body {
   display: flex;
   align-items: center;
   gap: 14px;
-  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.35);
   transition: all 0.2s ease;
+}
+
+.voice-main-btn.ko-btn {
+  background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.3);
+}
+
+.voice-main-btn.ja-btn {
+  background: linear-gradient(135deg, #E11D48 0%, #BE123C 100%);
+  box-shadow: 0 6px 18px rgba(225, 29, 72, 0.3);
 }
 
 .voice-main-btn:active {
@@ -1853,9 +1867,9 @@ body {
 }
 
 .voice-main-btn.active {
-  background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
+  background: linear-gradient(135deg, #DC2626 0%, #7F1D1D 100%) !important;
   animation: pulse 1.2s infinite;
-  box-shadow: 0 6px 20px rgba(220, 38, 38, 0.45);
+  box-shadow: 0 6px 20px rgba(220, 38, 38, 0.55) !important;
 }
 
 .voice-mic-circle {
@@ -2048,11 +2062,12 @@ body {
   font-weight: 700;
 }
 
-.papago-app-notice {
-  font-size: 11.5px;
-  color: #475569;
-  line-height: 1.6;
-  margin: 0 0 10px;
+.papago-mic-guide-box {
+  background: #FEF2F2;
+  border: 1.5px solid #FECDD3;
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
 }
 
 .papago-direct-app-btn {
@@ -2064,8 +2079,8 @@ body {
   color: #FFFFFF;
   text-decoration: none;
   border-radius: 12px;
-  padding: 12px 14px;
-  font-size: 13px;
+  padding: 13px 14px;
+  font-size: 13.5px;
   font-weight: 800;
   box-shadow: 0 4px 12px rgba(3, 199, 90, 0.25);
   transition: all 0.2s;
@@ -2074,6 +2089,48 @@ body {
 .papago-direct-app-btn:active {
   transform: scale(0.97);
   background: #02b150;
+}
+
+.papago-market-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #F8FAFC;
+  color: #1E293B;
+  text-decoration: none;
+  border: 1.5px solid #CBD5E1;
+  border-radius: 12px;
+  padding: 11px 14px;
+  font-size: 12.5px;
+  font-weight: 800;
+  transition: all 0.15s;
+}
+
+.papago-market-btn:active {
+  background: #E2E8F0;
+  transform: scale(0.98);
+}
+
+.google-trans-web-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #EFF6FF;
+  color: #1D4ED8;
+  text-decoration: none;
+  border: 1.5px solid #BFDBFE;
+  border-radius: 12px;
+  padding: 11px 14px;
+  font-size: 12.5px;
+  font-weight: 800;
+  transition: all 0.15s;
+}
+
+.google-trans-web-btn:active {
+  background: #DBEAFE;
+  transform: scale(0.98);
 }
 
 /* 직접 글자 입력 번역창 */
