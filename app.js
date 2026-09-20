@@ -472,7 +472,6 @@ function initVoices() {
 // 전역 TTS 오디오 객체: 매번 new Audio()를 하면 비동기 콜백에서 모바일 Autoplay에 막히므로, 
 // 전역으로 하나만 만들고 사용자 터치 시점에 unlock해야 함.
 let audioUnlocker = null;
-let globalTtsAudio = null;
 
 function unlockAudio() {
   if ('speechSynthesis' in window) {
@@ -483,17 +482,11 @@ function unlockAudio() {
     } catch (e) {}
   }
   try {
-    if (!audioUnlocker) {
-      audioUnlocker = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+    const player = document.getElementById('global-tts-player');
+    if (player) {
+      player.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+      player.play().then(() => { player.pause(); }).catch(() => {});
     }
-    audioUnlocker.play().then(() => { audioUnlocker.pause(); }).catch(() => {});
-    
-    // 🛡️ 구글 TTS 오디오 객체 미리 언락
-    if (!globalTtsAudio) {
-      globalTtsAudio = new Audio();
-    }
-    globalTtsAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
-    globalTtsAudio.play().then(() => { globalTtsAudio.pause(); }).catch(() => {});
   } catch (e) {}
 }
 
@@ -1592,7 +1585,7 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
     return;
   }
 
-  // 🛡️ 800ms 이내 동일 문장 초고속 연타만 방지
+  // 🛡️ 발화 중복 차단
   const now = Date.now();
   if (text === lastSpokenText && (now - lastSpokenTime) < 800) {
     if (onEndCallback) onEndCallback();
@@ -1601,24 +1594,11 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
   lastSpokenText = text;
   lastSpokenTime = now;
 
-  // 이전 오디오/발화 즉시 강제 정지
-  if (currentTtsAudio) {
-    try { currentTtsAudio.pause(); currentTtsAudio.currentTime = 0; } catch(e) {}
-    currentTtsAudio = null;
-  }
-  if ('speechSynthesis' in window) {
-    try { window.speechSynthesis.cancel(); } catch(e) {}
-  }
-
   let callbackFired = false;
   const finishSpeech = () => {
     if (!callbackFired) {
       callbackFired = true;
       state.isSpeakingNow = false;
-      if (currentTtsAudio) {
-        try { currentTtsAudio.pause(); } catch(e) {}
-        currentTtsAudio = null;
-      }
       if (onEndCallback) onEndCallback();
     }
   };
@@ -1627,102 +1607,35 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
   state.isSpeakingNow = true;
   showToast(lang === 'ja' ? '🔊 [일본어] 음성 낭독 중...' : '🔊 [한국어] 음성 낭독 중...');
 
-  const langCode = lang === 'ko' ? 'ko-KR' : 'ja-JP';
-
-  // 1차: 브라우저 내장 음성에 해당 언어 Voice가 확실히 존재하는지 확인
-  let nativeVoice = null;
-  if ('speechSynthesis' in window) {
-    try {
-      if (!state.voices || state.voices.length === 0) {
-        state.voices = window.speechSynthesis.getVoices() || [];
-      }
-      nativeVoice = (state.voices || []).find(v => 
-        v.lang === langCode || 
-        v.lang.toLowerCase() === langCode.toLowerCase() ||
-        (v.lang && v.lang.replace('_', '-').toLowerCase().startsWith(lang.toLowerCase()))
-      );
-    } catch(e) {}
-  }
-
-  // 🛡️ [핵심] 일본어 내장 음성이 없는 폰이거나 큐가 꼬였을 때를 대비:
-  // 네이티브 음성이 아예 없으면 볼 것도 없이 즉시 구글 오디오로 직행!
-  if (!nativeVoice) {
-    playGoogleTtsBackup();
-    return;
-  }
-
-  // 내장 음성이 확인된 경우: SpeechSynthesis 실행
+  // 무조건 100% 확실한 구글 스튜디오 오디오 스트림(HTML5 Audio DOM) 사용
+  // SpeechSynthesis는 기기마다 편차가 너무 심하고 큐가 꼬이는 버그가 많아 안드로이드에서 퇴출.
   try {
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = langCode;
-    utterance.rate = 0.95;
-    utterance.volume = 1.0;
-    utterance.voice = nativeVoice;
-
-    let hasStarted = false;
-    utterance.onstart = () => {
-      hasStarted = true;
-    };
-
-    utterance.onend = () => {
-      clearTimeout(safetyTimeout);
-      finishSpeech();
-    };
-
-    utterance.onerror = (e) => {
-      clearTimeout(safetyTimeout);
-      playGoogleTtsBackup();
-    };
-
-    // Chrome 버그 방지 60ms 딜레이
-    setTimeout(() => {
-      try {
-        window.speechSynthesis.speak(utterance);
-      } catch(e) {
-        playGoogleTtsBackup();
-      }
-    }, 60);
-
-    // 🚨 [진짜 핵심 와치독] 800ms 동안 onstart가 안 뜬다? = 브라우저 큐가 꼬여서 먹통된 상태!
-    // 즉시 내장 음성 포기하고 구글 오디오로 갈아탐!
-    setTimeout(() => {
-      if (!hasStarted && state.isSpeakingNow && !callbackFired) {
-        try { window.speechSynthesis.cancel(); } catch(e) {}
-        playGoogleTtsBackup();
-      }
-    }, 800);
-
-  } catch(e) {
-    playGoogleTtsBackup();
-  }
-
-  function playGoogleTtsBackup() {
-    if (callbackFired) return;
-    try {
-      const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(text)}`;
+    const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(text)}`;
+    const player = document.getElementById('global-tts-player');
+    
+    if (player) {
+      player.pause();
+      player.currentTime = 0;
+      player.referrerPolicy = 'no-referrer'; // 🚨 구글 404 에러 방지 필수!
+      player.src = ttsUrl;
       
-      // 모바일 Autoplay 정책 우회를 위해 사용자 터치로 언락된 전역 오디오 객체 재사용
-      let audio = globalTtsAudio;
-      if (!audio) audio = new Audio();
+      player.onended = () => { clearTimeout(safetyTimeout); finishSpeech(); };
+      player.onerror = () => { clearTimeout(safetyTimeout); finishSpeech(); };
       
-      currentTtsAudio = audio;
-      audio.referrerPolicy = 'no-referrer'; // 구글 404 에러 방지 필수!
-      audio.src = ttsUrl;
-
-      audio.onended = () => { clearTimeout(safetyTimeout); finishSpeech(); };
-      audio.onerror = () => { clearTimeout(safetyTimeout); finishSpeech(); };
-
-      const p = audio.play();
+      const p = player.play();
       if (p !== undefined) {
-        p.catch((e) => { 
-          clearTimeout(safetyTimeout); 
-          finishSpeech(); 
+        p.catch(() => {
+          clearTimeout(safetyTimeout);
+          finishSpeech();
         });
       }
-    } catch(e) {
+    } else {
       clearTimeout(safetyTimeout);
       finishSpeech();
     }
+  } catch(e) {
+    clearTimeout(safetyTimeout);
+    finishSpeech();
   }
 }
 
