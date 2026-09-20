@@ -8,10 +8,10 @@
   <meta http-equiv="Expires" content="0">
   <title>OsakaGo - 오사카 여행 일본어 번역기 & 길찾기 지도 & 맛집 가이드</title>
 
-  <!-- 강력한 모바일 캐시 영구 파괴 & v5.2 자동 강제 새로고침 엔진 -->
+  <!-- 강력한 모바일 캐시 영구 파괴 & v5.3 자동 강제 새로고침 엔진 -->
   <script>
     (function() {
-      var CURRENT_VERSION = '5.2';
+      var CURRENT_VERSION = '5.3';
       var urlParams = new URLSearchParams(window.location.search);
       // URL에 최신 버전 태그가 없으면 즉시 캐시를 뚫고 강제 새로고침 리다이렉트
       if (urlParams.get('v') !== CURRENT_VERSION) {
@@ -57,7 +57,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   
   <!-- 앱 스타일시트 -->
-  <link rel="stylesheet" href="style.css?v=5.2">
+  <link rel="stylesheet" href="style.css?v=5.3">
   <link rel="icon" href="icon-192.png">
 </head>
 <body>
@@ -84,11 +84,11 @@
     </header>
 
     <!-- 🔥 스마트폰 캐시 탈출 & 최신 버전 즉시 동기화 바 -->
-    <div class="force-refresh-bar" onclick="window.location.replace(window.location.origin+window.location.pathname+'?v=5.2&t='+Date.now())" style="background: linear-gradient(135deg, #1E40AF, #2563EB); border-radius: 14px; margin: 10px 16px 6px 16px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; box-shadow: 0 4px 12px rgba(37,99,235,0.25);">
+    <div class="force-refresh-bar" onclick="window.location.replace(window.location.origin+window.location.pathname+'?v=5.3&t='+Date.now())" style="background: linear-gradient(135deg, #1E40AF, #2563EB); border-radius: 14px; margin: 10px 16px 6px 16px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; box-shadow: 0 4px 12px rgba(37,99,235,0.25);">
       <div style="display: flex; align-items: center; gap: 10px;">
-        <span style="font-size: 22px;">✨</span>
+        <span style="font-size: 22px;">🚀</span>
         <div style="text-align: left;">
-          <div style="font-size: 13.5px; font-weight: 800; color: #FFFFFF;">최신 v5.2 버전 적용 완료!</div>
+          <div style="font-size: 13.5px; font-weight: 800; color: #FFFFFF;">최신 v5.3 음성 & 타이핑 번역 가동!</div>
           <div style="font-size: 11px; color: #BFDBFE;">터치 시 캐시 삭제 & 최신 동기화 🔄</div>
         </div>
       </div>
@@ -120,10 +120,22 @@
         <div class="voice-direct-card">
           <div class="voice-card-header">
             <span class="voice-badge">🎙️ 한·일 실시간 양방향 음성 통역</span>
-            <span class="voice-subinfo">터치 후 말하면 상대방 언어로 즉시 소리 낭독!</span>
+            <span class="voice-subinfo">터치 후 말하거나 입력하면 즉시 일본어 소리 낭독!</span>
           </div>
 
-          <!-- 2개의 큰 버튼: 내가 한국어로 말하기 / 상대방 일본어 듣기 -->
+          <!-- ✍️ 1순위: 직접 글자 입력 번역 (가장 확실하고 빠른 방법) -->
+          <div style="background: #F8FAFC; border: 2px solid #3B82F6; border-radius: 14px; padding: 12px; margin-bottom: 12px;">
+            <div style="font-size: 12px; font-weight: 800; color: #1D4ED8; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+              <span>✍️ 글자 직접 입력 (가장 확실한 번역)</span>
+              <span style="font-size: 11px; color: #64748B;">마이크 없이도 100% 작동</span>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <input type="text" id="voice-manual-input" placeholder="한국어로 하고 싶은 말을 입력하세요..." style="flex: 1; border: 1.5px solid #CBD5E1; border-radius: 10px; padding: 10px 12px; font-size: 14px; font-weight: 600; outline: none;">
+              <button id="voice-manual-btn" style="background: #2563EB; color: #FFF; border: none; border-radius: 10px; padding: 10px 16px; font-size: 14px; font-weight: 800; cursor: pointer; white-space: nowrap;">⚡ 번역 & 낭독</button>
+            </div>
+          </div>
+
+          <!-- 2개의 큰 마이크 버튼: 내가 한국어로 말하기 / 상대방 일본어 듣기 -->
           <div class="voice-dual-grid">
             <!-- 버튼 1: 내가 말하기 (한국어 ➔ 일본어) -->
             <button class="voice-main-btn ko-btn" id="voice-speak-ko-btn" title="터치하고 한국어로 말씀하세요">
@@ -151,29 +163,47 @@
           <!-- 실시간 음성 청취 모니터 -->
           <div class="voice-stream-box" id="voice-stream-box" style="display: none;">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-              <span id="voice-stream-text" style="font-size: 13px; font-weight: 700; color: #2563EB;">듣고 있습니다... 말씀하세요!</span>
+              <span id="voice-stream-text" style="font-size: 13.5px; font-weight: 800; color: #DC2626;">🔴 듣고 있습니다... 마이크에 말씀하세요!</span>
               <button class="voice-now-action-btn" id="voice-now-action-btn">⚡ 지금 번역</button>
             </div>
           </div>
 
-          <!-- 직접 글자 입력 번역 (조용한 곳이나 타이핑 시) -->
-          <div class="voice-manual-row">
-            <input type="text" id="voice-manual-input" placeholder="직접 글자를 입력해 번역할 수도 있어요" class="voice-manual-input">
-            <button id="voice-manual-btn" class="voice-manual-btn">번역</button>
+          <!-- ⚡ 터치 즉시 일본어로 말해주는 오사카 여행 1초 필수 표현 칩 -->
+          <div style="margin-top: 14px; background: #F1F5F9; border-radius: 12px; padding: 10px 12px;">
+            <div style="font-size: 11.5px; font-weight: 800; color: #475569; margin-bottom: 8px;">
+              💡 터치 즉시 일본어로 말해주는 1초 여행 표현:
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+              <button type="button" class="quick-speak-chip" data-speak="いくらですか？" data-pron="이쿠라데스카?" data-ko="얼마예요?" style="background: #FFF; border: 1px solid #CBD5E1; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 700; color: #1E293B; cursor: pointer;">💰 얼마예요?</button>
+              <button type="button" class="quick-speak-chip" data-speak="お会計お願いします" data-pron="오카이케이 오네가이시마스" data-ko="계산해 주세요" style="background: #FFF; border: 1px solid #CBD5E1; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 700; color: #1E293B; cursor: pointer;">🧾 계산해 주세요</button>
+              <button type="button" class="quick-speak-chip" data-speak="おすすめは何ですか？" data-pron="오스스메와 난데스카?" data-ko="추천 메뉴 뭐예요?" style="background: #FFF; border: 1px solid #CBD5E1; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 700; color: #1E293B; cursor: pointer;">🍜 추천 메뉴</button>
+              <button type="button" class="quick-speak-chip" data-speak="これください" data-pron="코레 쿠다사이" data-ko="이거 주세요" style="background: #FFF; border: 1px solid #CBD5E1; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 700; color: #1E293B; cursor: pointer;">👉 이거 주세요</button>
+              <button type="button" class="quick-speak-chip" data-speak="トイレはどこですか？" data-pron="토이레와 도코데스카?" data-ko="화장실 어디예요?" style="background: #FFF; border: 1px solid #CBD5E1; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 700; color: #1E293B; cursor: pointer;">🚽 화장실 위치</button>
+              <button type="button" class="quick-speak-chip" data-speak="カード使えますか？" data-pron="카-도 츠카에마스카?" data-ko="카드 결제 되나요?" style="background: #FFF; border: 1px solid #CBD5E1; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 700; color: #1E293B; cursor: pointer;">💳 카드 결제</button>
+              <button type="button" class="quick-speak-chip" data-speak="お水ください" data-pron="오미즈 쿠다사이" data-ko="물 좀 주세요" style="background: #FFF; border: 1px solid #CBD5E1; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 700; color: #1E293B; cursor: pointer;">💧 물 주세요</button>
+              <button type="button" class="quick-speak-chip" data-speak="ありがとうございます" data-pron="아리가토- 고자이마스" data-ko="감사합니다" style="background: #FFF; border: 1px solid #CBD5E1; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 700; color: #1E293B; cursor: pointer;">🙏 감사합니다</button>
+            </div>
           </div>
 
           <!-- 번역 결과 상자 (기본 숨김, 말하면 즉시 표시) -->
-          <div class="voice-result-box" id="voice-result-box" style="display: none;">
+          <div class="voice-result-box" id="voice-result-box" style="display: none; margin-top: 14px;">
             <div class="voice-result-header">
               <span class="result-badge" id="voice-result-badge">🇯🇵 일본어 번역 & 낭독</span>
               <div style="display: flex; gap: 6px;">
-                <button class="voice-sub-btn" id="voice-respeak-btn">🔊 다시 듣기</button>
                 <button class="voice-sub-btn" id="voice-bigshow-btn">📱 크게 보기</button>
               </div>
             </div>
             <div class="voice-res-original" id="voice-res-original"></div>
-            <div class="voice-res-japanese" id="voice-res-japanese"></div>
-            <div class="voice-res-reading" id="voice-res-reading"></div>
+            <div class="voice-res-japanese" id="voice-res-japanese" style="font-size: 22px; font-weight: 800; color: #1E293B; margin: 8px 0;"></div>
+            <div class="voice-res-reading" id="voice-res-reading" style="font-size: 14px; font-weight: 700; color: #E11D48; margin-bottom: 12px;"></div>
+            
+            <!-- 🔊 소리 듣기 큰 버튼 (직접 터치 시 100% 모바일 사운드 보장) -->
+            <button id="voice-respeak-btn" style="width: 100%; background: linear-gradient(135deg, #10B981, #059669); color: #FFF; border: none; border-radius: 12px; padding: 13px; font-size: 15px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 10px rgba(16,185,129,0.3);">
+              <span>🔊</span> <span>원어민 소리로 다시 듣기 (터치)</span>
+            </button>
+            <div style="font-size: 11px; color: #94A3B8; text-align: center; margin-top: 6px;">
+              💡 소리가 작거나 안 들리시면 스마트폰 옆면의 [볼륨 올리기] 버튼을 눌러주세요!
+            </div>
           </div>
         </div>
 
@@ -669,7 +699,7 @@
   <!-- Tesseract.js (일본어 사진 고속 OCR 엔진) -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <!-- 메인 앱 스크립트 연결 -->
-  <script src="app.js?v=5.2"></script>
+  <script src="app.js?v=5.3"></script>
 
   <!-- PWA 서비스 워커 관리 및 앱 설치 제어 -->
   <script>

@@ -1611,6 +1611,11 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
   // 1차 우선: 기기 내장 네이티브 음성 합성 (딜레이 0초, 100% 모바일 사운드 보장)
   if ('speechSynthesis' in window) {
     try {
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+      window.speechSynthesis.cancel();
+
       if (!state.voices || state.voices.length === 0) {
         state.voices = window.speechSynthesis.getVoices() || [];
       }
@@ -1635,6 +1640,10 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
       };
 
       window.speechSynthesis.speak(utterance);
+      // iOS Safari 버그 대응: speak 직후 강제 resume 호출
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
       return;
     } catch (e) {
       console.warn('SpeechSynthesis exception:', e);
@@ -2661,6 +2670,42 @@ function setupEventListeners() {
       }
     });
   }
+
+  // ⚡ 터치 즉시 일본어로 말해주는 1초 여행 표현 칩 이벤트 리스너
+  document.querySelectorAll('.quick-speak-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const speakTextStr = btn.dataset.speak;
+      const pronStr = btn.dataset.pron;
+      const koStr = btn.dataset.ko;
+      if (speakTextStr) {
+        unlockAudio();
+        const resultBox = document.getElementById('voice-result-box');
+        const resultBadge = document.getElementById('voice-result-badge');
+        const resOriginal = document.getElementById('voice-res-original');
+        const resJapanese = document.getElementById('voice-res-japanese');
+        const resReading = document.getElementById('voice-res-reading');
+
+        if (resultBadge) resultBadge.innerText = '🇯🇵 일본어 낭독';
+        if (resOriginal) resOriginal.innerText = `🇰🇷 나: "${koStr}"`;
+        if (resJapanese) resJapanese.innerText = speakTextStr;
+        if (resReading) {
+          resReading.innerText = `🗣️ [발음] ${pronStr}`;
+          resReading.style.display = 'inline-block';
+        }
+        if (resultBox) {
+          resultBox.style.display = 'block';
+          resultBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        lastOriginalText = koStr;
+        lastTranslatedText = speakTextStr;
+        lastTranslatedLang = 'ja';
+        lastPronunciationText = pronStr;
+
+        speakText(speakTextStr, 'ja');
+      }
+    });
+  });
 
   // 📸 사진 촬영 & 갤러리 글자 해석(OCR) 및 여행 설명 이벤트 리스너 바인딩
   const photoFileInput = document.getElementById('photo-file-input');
