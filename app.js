@@ -580,26 +580,6 @@ function startDualTurn(speakerLang) {
   // 번역 실행 헬퍼 (중복 실행 방지)
   async function triggerTranslation(text) {
     let cleanText = (text || '').trim();
-    function cleanRepeatedPhrases(str) {
-      if (!str) return str;
-      const chunks = str.split(/(?<=[.?!~요다까] )|(?<=[.?!~요다까])/).filter(c => c.trim().length > 0);
-      const uniqueChunks = [];
-      let lastChunk = '';
-      for (let chunk of chunks) {
-        let trimmed = chunk.trim();
-        if (trimmed === lastChunk) continue;
-        if (lastChunk && trimmed.startsWith(lastChunk)) {
-          uniqueChunks[uniqueChunks.length - 1] = trimmed;
-          lastChunk = trimmed;
-          continue;
-        }
-        uniqueChunks.push(trimmed);
-        lastChunk = trimmed;
-      }
-      return uniqueChunks.join(' ');
-    }
-    cleanText = cleanRepeatedPhrases(cleanText);
-
     if (hasExecutedTranslation || !cleanText) return;
     hasExecutedTranslation = true;
 
@@ -2177,28 +2157,6 @@ function resetVoiceTurnUI() {
 async function triggerVoiceTranslate(text, fromLang) {
   let cleanText = (text || '').trim();
   
-  // 안드로이드 Chrome STT 중복 인식 버그 완벽 제거 (예: "안녕하세요 안녕하세요 화장실")
-  function cleanRepeatedPhrases(str) {
-    if (!str) return str;
-    const chunks = str.split(/(?<=[.?!~요다까] )|(?<=[.?!~요다까])/).filter(c => c.trim().length > 0);
-    const uniqueChunks = [];
-    let lastChunk = '';
-    for (let chunk of chunks) {
-      let trimmed = chunk.trim();
-      if (trimmed === lastChunk) continue;
-      if (lastChunk && trimmed.startsWith(lastChunk)) {
-        uniqueChunks[uniqueChunks.length - 1] = trimmed;
-        lastChunk = trimmed;
-        continue;
-      }
-      uniqueChunks.push(trimmed);
-      lastChunk = trimmed;
-    }
-    return uniqueChunks.join(' ');
-  }
-  
-  cleanText = cleanRepeatedPhrases(cleanText);
-
   if (!cleanText || isTranslatingVoiceTurn) return;
 
   // 🛡️ 동일 문장 1.5초 내 중복 번역 방지 (두 번 나오는 현상 원천 차단)
