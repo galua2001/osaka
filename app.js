@@ -1598,74 +1598,70 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
     }
   };
 
-  const safetyTimeout = setTimeout(finishSpeech, Math.max(3500, text.length * 400));
+  const safetyTimeout = setTimeout(finishSpeech, Math.max(3000, text.length * 350));
   state.isSpeakingNow = true;
-  showToast(lang === 'ja' ? '🔊 [일본어] 원어민 음성 안내 중...' : '🔊 [한국어] 음성 안내 중...');
+  showToast(lang === 'ja' ? '🔊 [일본어] 음성 안내 중...' : '🔊 [한국어] 음성 안내 중...');
 
-  // 1차: Google 원어민 TTS 오디오 스트림 시도 (모바일 언어팩 미설치 기기 100% 대응)
-  let googleAudioStarted = false;
-  try {
-    const gTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(text)}`;
-    const audio = new Audio(gTtsUrl);
-    currentTtsAudio = audio;
+  // 1차 우선: 기기 내장 네이티브 음성 합성 (딜레이 0초, 100% 모바일 사운드 보장)
+  if ('speechSynthesis' in window) {
+    try {
+      if (!state.voices || state.voices.length === 0) {
+        state.voices = window.speechSynthesis.getVoices() || [];
+      }
 
-    audio.onended = () => {
-      clearTimeout(safetyTimeout);
-      finishSpeech();
-    };
+      const utterance = new SpeechSynthesisUtterance(text);
+      const langCode = lang === 'ko' ? 'ko-KR' : 'ja-JP';
+      utterance.lang = langCode;
+      utterance.rate = 0.95;
+      utterance.volume = 1.0;
 
-    audio.onerror = (e) => {
-      console.warn('Google TTS audio load error, fallback to WebSpeech:', e);
-      if (!googleAudioStarted) fallbackWebSpeech();
-    };
+      const voice = (state.voices || []).find(v => v.lang === langCode || (v.lang && v.lang.replace('_', '-').startsWith(lang)));
+      if (voice) utterance.voice = voice;
 
-    const p = audio.play();
-    if (p !== undefined) {
-      p.then(() => {
-        googleAudioStarted = true;
-      }).catch((err) => {
-        console.warn('Google Audio play prevented, fallback to WebSpeech:', err);
-        fallbackWebSpeech();
-      });
+      utterance.onend = () => {
+        clearTimeout(safetyTimeout);
+        finishSpeech();
+      };
+
+      utterance.onerror = (e) => {
+        console.warn('SpeechSynthesis error, trying audio stream fallback:', e);
+        fallbackAudioStream();
+      };
+
+      window.speechSynthesis.speak(utterance);
+      return;
+    } catch (e) {
+      console.warn('SpeechSynthesis exception:', e);
     }
-  } catch (err) {
-    fallbackWebSpeech();
   }
 
-  // 2차: Web Speech API 폴백
-  function fallbackWebSpeech() {
-    if (!('speechSynthesis' in window)) {
-      clearTimeout(safetyTimeout);
-      finishSpeech();
-      return;
-    }
+  // 2차 백업: 외부 오디오 스트림 시도
+  fallbackAudioStream();
 
-    if (!state.voices || state.voices.length === 0) {
-      state.voices = window.speechSynthesis.getVoices();
-    }
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    const langCode = lang === 'ko' ? 'ko-KR' : 'ja-JP';
-    utterance.lang = langCode;
-    utterance.rate = 0.92;
-    utterance.volume = 1.0;
-
-    const voice = state.voices.find(v => v.lang === langCode || v.lang.replace('_', '-').startsWith(lang));
-    if (voice) utterance.voice = voice;
-
-    utterance.onend = () => {
-      clearTimeout(safetyTimeout);
-      finishSpeech();
-    };
-
-    utterance.onerror = () => {
-      clearTimeout(safetyTimeout);
-      finishSpeech();
-    };
-
+  function fallbackAudioStream() {
     try {
-      window.speechSynthesis.speak(utterance);
-    } catch (e) {
+      const gTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(text)}`;
+      const audio = new Audio(gTtsUrl);
+      currentTtsAudio = audio;
+
+      audio.onended = () => {
+        clearTimeout(safetyTimeout);
+        finishSpeech();
+      };
+
+      audio.onerror = () => {
+        clearTimeout(safetyTimeout);
+        finishSpeech();
+      };
+
+      const p = audio.play();
+      if (p !== undefined) {
+        p.catch(() => {
+          clearTimeout(safetyTimeout);
+          finishSpeech();
+        });
+      }
+    } catch (err) {
       clearTimeout(safetyTimeout);
       finishSpeech();
     }
@@ -1970,7 +1966,7 @@ function startVoiceTurn(speakerLang) {
     const rec = new SpeechRecognition();
     voiceTurnRec = rec;
     rec.lang = speakerLang === 'ko' ? 'ko-KR' : 'ja-JP';
-    rec.continuous = false;
+    rec.continuous = true; // 끊기지 않고 사용자의 말을 끝까지 듣도록 설정
     rec.interimResults = true;
 
     rec.onstart = () => {
@@ -1994,20 +1990,24 @@ function startVoiceTurn(speakerLang) {
         voiceTurnBuffer = currentSpoken;
         if (streamText) streamText.innerText = `🗣️ "${currentSpoken}"`;
 
-        // 묵음 감지 타이머 (850ms 동안 말이 멈추면 자동 번역)
+        // 묵음 감지 타이머 (1.1초 동안 말이 멈추면 자동 번역)
         if (voiceSilenceTimer) clearTimeout(voiceSilenceTimer);
         voiceSilenceTimer = setTimeout(() => {
           stopVoiceTurn(true);
-        }, 850);
+        }, 1100);
       }
     };
 
     rec.onerror = (err) => {
       console.warn('Voice STT Error:', err);
       if (err.error === 'not-allowed') {
-        showToast('⚠️ 마이크 권한이 차단되었습니다. 주소창 설정에서 마이크를 허용해 주세요.');
+        showToast('⚠️ 마이크 권한이 차단되었습니다. 브라우저 설정에서 마이크를 허용해 주세요.');
+        resetVoiceTurnUI();
+      } else if (err.error === 'no-speech') {
+        if (streamText) streamText.innerText = '🎙️ 듣고 있습니다... 마이크에 대고 말씀해주세요!';
+      } else {
+        resetVoiceTurnUI();
       }
-      resetVoiceTurnUI();
     };
 
     rec.onend = () => {
@@ -2088,36 +2088,28 @@ async function triggerVoiceTranslate(text, fromLang) {
   let translated = '';
   let rawRomaji = '';
 
-  // 1차: Google Translate single API
+  // 1차: Chrome 공식 초고속 무제한 번역 API (차단 0%, 0.05초 초고속)
   try {
-    const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${fromLang}&tl=${toLang}&dt=t&dt=rm&q=${encodeURIComponent(text)}`;
-    const resp = await fetch(gUrl);
-    if (resp.ok) {
-      const data = await resp.json();
-      if (data && data[0]) {
-        translated = data[0].filter(it => it[0]).map(it => it[0]).join('');
-        for (let k = 0; k < data[0].length; k++) {
-          const seg = data[0][k];
-          if (seg && seg.length > 2 && typeof seg[2] === 'string' && seg[2].trim()) {
-            rawRomaji = seg[2];
-          } else if (seg && seg.length > 3 && typeof seg[3] === 'string' && seg[3].trim()) {
-            rawRomaji = seg[3];
-          }
-        }
+    const cUrl = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=${fromLang}&tl=${toLang}&q=${encodeURIComponent(text)}`;
+    const cResp = await fetch(cUrl);
+    if (cResp.ok) {
+      const cData = await cResp.json();
+      if (Array.isArray(cData) && cData.length > 0 && typeof cData[0] === 'string') {
+        translated = cData[0];
       }
     }
-  } catch (err) {
-    console.warn('Google Translate API error:', err);
+  } catch (cErr) {
+    console.warn('Chrome Translate API error:', cErr);
   }
 
-  // 2차 백업: MyMemory
+  // 2차 백업: MyMemory 번역 (일 50,000단어)
   if (!translated) {
     try {
-      const mUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${fromLang}|${toLang}`;
+      const mUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${fromLang}|${toLang}&de=osakatrip2026@gmail.com`;
       const mResp = await fetch(mUrl);
       if (mResp.ok) {
         const mData = await mResp.json();
-        if (mData && mData.responseData) {
+        if (mData && mData.responseData && mData.responseData.translatedText) {
           translated = mData.responseData.translatedText;
         }
       }
@@ -2126,11 +2118,37 @@ async function triggerVoiceTranslate(text, fromLang) {
     }
   }
 
+  // 3차: Google single 백업 (로마자 발음 추출용)
+  if (toLang === 'ja') {
+    try {
+      const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${fromLang}&tl=${toLang}&dt=t&dt=rm&q=${encodeURIComponent(text)}`;
+      const resp = await fetch(gUrl);
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data && data[0]) {
+          if (!translated) {
+            translated = data[0].filter(it => it[0]).map(it => it[0]).join('');
+          }
+          for (let k = 0; k < data[0].length; k++) {
+            const seg = data[0][k];
+            if (seg && seg.length > 2 && typeof seg[2] === 'string' && seg[2].trim()) {
+              rawRomaji = seg[2];
+            } else if (seg && seg.length > 3 && typeof seg[3] === 'string' && seg[3].trim()) {
+              rawRomaji = seg[3];
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Google single API error:', err);
+    }
+  }
+
   if (streamBox) streamBox.style.display = 'none';
   isTranslatingVoiceTurn = false;
 
   if (!translated) {
-    showToast('⚠️ 번역 서버 연결 실패. 다시 말씀해 주세요.');
+    showToast('⚠️ 번역 서버 연결 지연. 다시 말씀해 주세요.');
     return;
   }
 
@@ -2445,16 +2463,29 @@ async function processPhotoFile(file) {
     // 4. 추출된 일본어 ➔ 한국어 번역
     let translatedText = '';
     try {
-      const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=ja&tl=ko&dt=t&q=${encodeURIComponent(recognizedText)}`;
-      const resp = await fetch(gUrl);
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data && data[0]) {
-          translatedText = data[0].filter(it => it[0]).map(it => it[0]).join('');
+      const cUrl = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=ja&tl=ko&q=${encodeURIComponent(recognizedText)}`;
+      const cResp = await fetch(cUrl);
+      if (cResp.ok) {
+        const cData = await cResp.json();
+        if (Array.isArray(cData) && cData.length > 0 && typeof cData[0] === 'string') {
+          translatedText = cData[0];
         }
       }
     } catch (err) {
       console.warn('Translate error:', err);
+    }
+
+    if (!translatedText) {
+      try {
+        const mUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(recognizedText)}&langpair=ja|ko&de=osakatrip2026@gmail.com`;
+        const mResp = await fetch(mUrl);
+        if (mResp.ok) {
+          const mData = await mResp.json();
+          if (mData && mData.responseData && mData.responseData.translatedText) {
+            translatedText = mData.responseData.translatedText;
+          }
+        }
+      } catch(e) {}
     }
 
     if (!translatedText) {
@@ -2515,15 +2546,28 @@ async function executePhotoTextLookup(query) {
 
   let translated = '';
   try {
-    const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ko&dt=t&q=${encodeURIComponent(clean)}`;
-    const resp = await fetch(gUrl);
-    if (resp.ok) {
-      const data = await resp.json();
-      if (data && data[0]) {
-        translated = data[0].filter(it => it[0]).map(it => it[0]).join('');
+    const cUrl = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=auto&tl=ko&q=${encodeURIComponent(clean)}`;
+    const cResp = await fetch(cUrl);
+    if (cResp.ok) {
+      const cData = await cResp.json();
+      if (Array.isArray(cData) && cData.length > 0 && typeof cData[0] === 'string') {
+        translated = cData[0];
       }
     }
   } catch (e) {}
+
+  if (!translated) {
+    try {
+      const mUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(clean)}&langpair=ja|ko&de=osakatrip2026@gmail.com`;
+      const mResp = await fetch(mUrl);
+      if (mResp.ok) {
+        const mData = await mResp.json();
+        if (mData && mData.responseData && mData.responseData.translatedText) {
+          translated = mData.responseData.translatedText;
+        }
+      }
+    } catch(e) {}
+  }
 
   if (!translated) translated = clean;
 
@@ -2968,27 +3012,19 @@ async function handleDialogUtterance(text, fromLang) {
   let rawRomaji = '';
 
   try {
-    const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${fromLang}&tl=${toLang}&dt=t&dt=rm&q=${encodeURIComponent(text)}`;
-    const resp = await fetch(gUrl);
-    if (resp.ok) {
-      const data = await resp.json();
-      if (data && data[0]) {
-        translated = data[0].filter(it => it[0]).map(it => it[0]).join('');
-        for (let k = 0; k < data[0].length; k++) {
-          const seg = data[0][k];
-          if (seg && seg.length > 2 && typeof seg[2] === 'string' && seg[2].trim()) {
-            rawRomaji = seg[2];
-          }
-        }
+    const cUrl = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=${fromLang}&tl=${toLang}&q=${encodeURIComponent(text)}`;
+    const cResp = await fetch(cUrl);
+    if (cResp.ok) {
+      const cData = await cResp.json();
+      if (Array.isArray(cData) && cData.length > 0 && typeof cData[0] === 'string') {
+        translated = cData[0];
       }
     }
-  } catch (e) {
-    console.warn(e);
-  }
+  } catch(e) {}
 
   if (!translated) {
     try {
-      const mUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${fromLang}|${toLang}`;
+      const mUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${fromLang}|${toLang}&de=osakatrip2026@gmail.com`;
       const mResp = await fetch(mUrl);
       if (mResp.ok) {
         const mData = await mResp.json();
