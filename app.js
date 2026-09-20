@@ -476,16 +476,16 @@ let audioUnlocker = null;
 function unlockAudio() {
   if ('speechSynthesis' in window) {
     try {
-      const u = new SpeechSynthesisUtterance(' ');
-      u.volume = 0.01;
-      window.speechSynthesis.speak(u);
+      // 🚨 절대 안드로이드에서 cancel()이나 말 없는 큐를 주입하지 마세요. (Deadlock 유발)
+      // 안드로이드는 한 번 꼬이면 브라우저 재시작 전까지 영구 먹통됩니다.
     } catch (e) {}
   }
   try {
     const player = document.getElementById('global-tts-player');
     if (player) {
       player.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
-      player.play().then(() => { player.pause(); }).catch(() => {});
+      // 🚨 절대 pause() 하지 마세요! 끝까지 재생되어야 브라우저가 확실하게 '사용자가 허락한 오디오'로 인증해 줍니다.
+      player.play().catch(() => {});
     }
   } catch (e) {}
 }
@@ -1607,39 +1607,34 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
   state.isSpeakingNow = true;
   showToast(lang === 'ja' ? '🔊 [일본어] 음성 낭독 중...' : '🔊 [한국어] 음성 낭독 중...');
 
-  // 1차 가장 확실한 내장 SpeechSynthesis 엔진 (예전 5.8버전에서 소리가 나던 바로 그 방식!)
-  if ('speechSynthesis' in window) {
-    try {
-      window.speechSynthesis.cancel();
+  try {
+    // 🚨 안드로이드 내장 SpeechSynthesis는 첫 발화 삼킴 + cancel() 시 영구 데드락 버그로 인해 전면 폐기
+    // 🚨 Google TTS IP 밴(429) 회피를 위해 무조건 client=gtx 사용
+    const ttsUrl = `https://translate.googleapis.com/translate_tts?ie=UTF-8&client=gtx&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(text)}`;
+    const player = document.getElementById('global-tts-player');
+    
+    if (player) {
+      player.pause();
+      player.currentTime = 0;
+      player.referrerPolicy = 'no-referrer'; // 필수
+      player.src = ttsUrl;
       
-      const utterance = new SpeechSynthesisUtterance(text);
-      const langCode = lang === 'ko' ? 'ko-KR' : 'ja-JP';
-      utterance.lang = langCode;
-      utterance.rate = 0.95;
-      utterance.volume = 1.0;
-
-      // 안드로이드 삼성폰 등에서는 getVoices()에 일본어가 안 보일 수 있지만
-      // utterance.lang만 설정해주면 자체적으로 알아서 읽어줌!
-      if (state.voices && state.voices.length > 0) {
-        const voice = state.voices.find(v => v.lang.replace('_', '-').toLowerCase().startsWith(lang.toLowerCase()));
-        if (voice) utterance.voice = voice;
-      }
-
-      utterance.onend = () => { clearTimeout(safetyTimeout); finishSpeech(); };
-      utterance.onerror = () => { clearTimeout(safetyTimeout); finishSpeech(); };
-
-      setTimeout(() => {
-        try {
-          window.speechSynthesis.speak(utterance);
-        } catch(e) {
+      player.onended = () => { clearTimeout(safetyTimeout); finishSpeech(); };
+      player.onerror = () => { clearTimeout(safetyTimeout); finishSpeech(); };
+      
+      const p = player.play();
+      if (p !== undefined) {
+        p.catch(() => {
+          clearTimeout(safetyTimeout);
           finishSpeech();
-        }
-      }, 60);
-      return;
-    } catch(e) {
+        });
+      }
+    } else {
+      clearTimeout(safetyTimeout);
       finishSpeech();
     }
-  } else {
+  } catch(e) {
+    clearTimeout(safetyTimeout);
     finishSpeech();
   }
 }
