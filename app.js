@@ -1572,12 +1572,23 @@ function toggleMapSpeechRecognition() {
 // 8. TTS 음성 합성 & 복사 & 모달 (하이브리드: 구글 TTS 오디오 + Web Speech API)
 // ==========================================
 let currentTtsAudio = null;
+let lastSpokenText = '';
+let lastSpokenTime = 0;
 
 function speakText(text, lang = 'ja', onEndCallback = null) {
   if (!text || text === '번역 결과가 여기에 표시됩니다.') {
     if (onEndCallback) onEndCallback();
     return;
   }
+
+  // 🛡️ 동일 문장 1.5초 내 중복 낭독 원천 차단 (두 번씩 나오는 현상 박멸)
+  const now = Date.now();
+  if (text === lastSpokenText && (now - lastSpokenTime) < 1500) {
+    if (onEndCallback) onEndCallback();
+    return;
+  }
+  lastSpokenText = text;
+  lastSpokenTime = now;
 
   // 이전 오디오 및 발화 즉시 정지
   if (currentTtsAudio) {
@@ -1635,12 +1646,13 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
       };
 
       utterance.onerror = (e) => {
-        console.warn('SpeechSynthesis error, trying audio stream fallback:', e);
-        fallbackAudioStream();
+        // 취소/인터럽트 에러는 정상 중단이므로 fallback 오디오 실행 금지!
+        clearTimeout(safetyTimeout);
+        finishSpeech();
       };
 
       window.speechSynthesis.speak(utterance);
-      // iOS Safari 버그 대응: speak 직후 강제 resume 호출
+      // iOS Safari 대응: speak 직후 강제 resume 호출
       if (window.speechSynthesis.paused) {
         window.speechSynthesis.resume();
       }
@@ -1650,7 +1662,7 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
     }
   }
 
-  // 2차 백업: 외부 오디오 스트림 시도
+  // 2차 백업 (speechSynthesis가 아예 지원되지 않는 환경에서만 오디오 스트림 시도)
   fallbackAudioStream();
 
   function fallbackAudioStream() {
@@ -2044,6 +2056,9 @@ function startVoiceTurn(speakerLang) {
   }
 }
 
+let lastRequestedText = '';
+let lastRequestedTimestamp = 0;
+
 function stopVoiceTurn(doTranslate = false) {
   if (voiceSilenceTimer) {
     clearTimeout(voiceSilenceTimer);
@@ -2051,10 +2066,16 @@ function stopVoiceTurn(doTranslate = false) {
   }
   const textToTranslate = voiceTurnBuffer.trim();
   const currentSpeaker = activeVoiceSpeaker;
+
+  // 🛡️ 버퍼와 스피커 상태 즉시 초기화 (중복 실행 방지)
+  voiceTurnBuffer = '';
   activeVoiceSpeaker = null;
 
   if (voiceTurnRec) {
-    try { voiceTurnRec.stop(); } catch(e) {}
+    try {
+      voiceTurnRec.onend = null; // onend 연쇄 호출 방지
+      voiceTurnRec.stop();
+    } catch(e) {}
     voiceTurnRec = null;
   }
 
@@ -2083,7 +2104,17 @@ function resetVoiceTurnUI() {
 }
 
 async function triggerVoiceTranslate(text, fromLang) {
-  if (!text || !text.trim() || isTranslatingVoiceTurn) return;
+  const cleanText = (text || '').trim();
+  if (!cleanText || isTranslatingVoiceTurn) return;
+
+  // 🛡️ 동일 문장 1.5초 내 중복 번역 방지 (두 번 나오는 현상 원천 차단)
+  const now = Date.now();
+  if (cleanText === lastRequestedText && (now - lastRequestedTimestamp) < 1500) {
+    return;
+  }
+  lastRequestedText = cleanText;
+  lastRequestedTimestamp = now;
+
   isTranslatingVoiceTurn = true;
 
   const toLang = fromLang === 'ko' ? 'ja' : 'ko';
