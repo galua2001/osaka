@@ -469,25 +469,20 @@ function initVoices() {
 
 // ==========================================
 // 모바일 브라우저 오디오 언락 (Web Speech API + HTML5 Audio 완벽 해제)
-// 전역 TTS 오디오 객체: 매번 new Audio()를 하면 비동기 콜백에서 모바일 Autoplay에 막히므로, 
-// 전역으로 하나만 만들고 사용자 터치 시점에 unlock해야 함.
 let audioUnlocker = null;
-
 function unlockAudio() {
   if ('speechSynthesis' in window) {
     try {
-      // 안드로이드 '첫 발화 삼킴 버그'를 소모시키기 위한 무음 더미 발화
       const u = new SpeechSynthesisUtterance(' ');
-      u.volume = 0;
+      u.volume = 0.01;
       window.speechSynthesis.speak(u);
     } catch (e) {}
   }
   try {
-    const player = document.getElementById('global-tts-player');
-    if (player) {
-      player.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
-      player.play().catch(() => {});
+    if (!audioUnlocker) {
+      audioUnlocker = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
     }
+    audioUnlocker.play().then(() => { audioUnlocker.pause(); }).catch(() => {});
   } catch (e) {}
 }
 
@@ -1586,55 +1581,118 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
     return;
   }
 
-  // 🛡️ 발화 중복 차단
+  // 🛡️ 발화 중복 원천 차단 (현재 말하고 있거나 2.5초 이내 동일 문장이면 발화 무시)
   const now = Date.now();
-  if (text === lastSpokenText && (now - lastSpokenTime) < 800) {
+  if (state.isSpeakingNow || (text === lastSpokenText && (now - lastSpokenTime) < 2500)) {
     if (onEndCallback) onEndCallback();
     return;
   }
   lastSpokenText = text;
   lastSpokenTime = now;
 
+  // 이전 오디오 및 발화 즉시 정지
+  if (currentTtsAudio) {
+    try {
+      currentTtsAudio.pause();
+      currentTtsAudio.currentTime = 0;
+    } catch (e) {}
+    currentTtsAudio = null;
+  }
+  if ('speechSynthesis' in window) {
+    try { window.speechSynthesis.cancel(); } catch (e) {}
+  }
+
   let callbackFired = false;
   const finishSpeech = () => {
     if (!callbackFired) {
       callbackFired = true;
       state.isSpeakingNow = false;
+      if (currentTtsAudio) {
+        try { currentTtsAudio.pause(); } catch(e) {}
+        currentTtsAudio = null;
+      }
       if (onEndCallback) onEndCallback();
     }
   };
 
-  const safetyTimeout = setTimeout(finishSpeech, Math.max(4000, text.length * 400));
+  const safetyTimeout = setTimeout(finishSpeech, Math.max(2500, text.length * 300));
   state.isSpeakingNow = true;
-  showToast(lang === 'ja' ? '🔊 [일본어] 음성 낭독 중...' : '🔊 [한국어] 음성 낭독 중...');
+  showToast(lang === 'ja' ? '🔊 [일본어] 음성 안내 중...' : '🔊 [한국어] 음성 안내 중...');
 
+  // 1차 우선: 기기 내장 네이티브 음성 합성 (Chrome 이중 발화 버그 방지 규격)
   if ('speechSynthesis' in window) {
     try {
-      // 🚨 절대 cancel()을 호출하지 마세요. 안드로이드에서 큐가 꼬였을 때 cancel()을 호출하면 영구 데드락(먹통)이 발생합니다.
-      
+      window.speechSynthesis.cancel(); // 큐 초기화
+
+      if (!state.voices || state.voices.length === 0) {
+        state.voices = window.speechSynthesis.getVoices() || [];
+      }
+
       const utterance = new SpeechSynthesisUtterance(text);
       const langCode = lang === 'ko' ? 'ko-KR' : 'ja-JP';
       utterance.lang = langCode;
       utterance.rate = 0.95;
       utterance.volume = 1.0;
 
-      // 안드로이드 삼성폰 등에서는 getVoices()에 일본어가 안 보일 수 있지만
-      // utterance.lang만 설정해주면 자체적으로 알아서 읽어줌
-      if (state.voices && state.voices.length > 0) {
-        const voice = state.voices.find(v => v.lang.replace('_', '-').toLowerCase().startsWith(lang.toLowerCase()));
-        if (voice) utterance.voice = voice;
-      }
+      const voice = (state.voices || []).find(v => v.lang === langCode || (v.lang && v.lang.replace('_', '-').startsWith(lang)));
+      if (voice) utterance.voice = voice;
 
-      utterance.onend = () => { clearTimeout(safetyTimeout); finishSpeech(); };
-      utterance.onerror = () => { clearTimeout(safetyTimeout); finishSpeech(); };
+      utterance.onend = () => {
+        clearTimeout(safetyTimeout);
+        finishSpeech();
+      };
 
-      window.speechSynthesis.speak(utterance);
+      utterance.onerror = () => {
+        clearTimeout(safetyTimeout);
+        finishSpeech();
+      };
+
+      // 🛡️ Chrome Web Speech API 알려진 이중 발화 큐 버그 패치:
+      // cancel() 후 60ms 딜레이를 주어 브라우저 큐가 비워진 후 단 1회만 깨끗하게 speak 실행!
+      setTimeout(() => {
+        try {
+          window.speechSynthesis.speak(utterance);
+        } catch (spkErr) {
+          console.warn('speak error, trying fallback:', spkErr);
+          fallbackAudioStream();
+        }
+      }, 60);
       return;
-    } catch(e) {
+    } catch (e) {
+      console.warn('SpeechSynthesis exception:', e);
+    }
+  }
+
+  // 2차 백업 (speechSynthesis가 아예 지원되지 않는 환경에서만 오디오 스트림 시도)
+  fallbackAudioStream();
+
+  function fallbackAudioStream() {
+    try {
+      const gTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(text)}`;
+      const audio = new Audio(gTtsUrl);
+      currentTtsAudio = audio;
+
+      audio.onended = () => {
+        clearTimeout(safetyTimeout);
+        finishSpeech();
+      };
+
+      audio.onerror = () => {
+        clearTimeout(safetyTimeout);
+        finishSpeech();
+      };
+
+      const p = audio.play();
+      if (p !== undefined) {
+        p.catch(() => {
+          clearTimeout(safetyTimeout);
+          finishSpeech();
+        });
+      }
+    } catch (err) {
+      clearTimeout(safetyTimeout);
       finishSpeech();
     }
-  } else {
-    finishSpeech();
   }
 }
 
@@ -1861,23 +1919,20 @@ let voiceTurnRec = null;
 let activeVoiceSpeaker = null; // 'ko' | 'ja' | null
 let voiceTurnBuffer = '';
 let voiceSilenceTimer = null;
-let isSessionProcessing = false; // 🛡️ 세션 처리 중 락 (타이머+버튼+onend 3중 호출 완전 차폐!)
+let isTranslatingVoiceTurn = false;
 let lastTranslatedText = '';
 let lastTranslatedLang = 'ja';
 let lastOriginalText = '';
 let lastPronunciationText = '';
 
 function toggleVoiceSpeaker(speakerLang) {
-  // 🛡️ 이미 번역 처리 또는 낭독 중이면 버튼 연타 무시
-  if (isSessionProcessing) return;
-
   if (activeVoiceSpeaker) {
     if (activeVoiceSpeaker === speakerLang) {
-      // 🗣️ 같은 버튼 다시 터치: 즉시 말끝 인식 & 단 1회만 정확히 확정 번역!
-      commitVoiceTurn();
+      // 🗣️ 말하던 중 같은 버튼을 다시 누름: 즉시 말끝 인식 & 1회만 정확히 번역!
+      stopVoiceTurn(true);
     } else {
-      // 다른 언어로 전환: 이전 발화 무효화하고 새 언어 시작
-      cancelVoiceTurn();
+      // 다른 언어 버튼을 누름: 이전 인식 취소하고 새 언어로 전환
+      stopVoiceTurn(false);
       startVoiceTurn(speakerLang);
     }
   } else {
@@ -1885,43 +1940,7 @@ function toggleVoiceSpeaker(speakerLang) {
   }
 }
 
-// 🛡️ 연속/중복 인식된 단어 및 어구 자동 압축 필터 (5번 반복되는 현상 원천 박멸)
-function cleanRepeatedPhrases(text) {
-  if (!text) return '';
-  let str = text.trim();
-
-  // 1) 연속으로 똑같이 반복된 단어 압축 ("얼마예요 얼마예요 얼마예요" -> "얼마예요")
-  const tokens = str.split(/\s+/);
-  const dedupTokens = [];
-  for (let i = 0; i < tokens.length; i++) {
-    if (i === 0 || tokens[i] !== tokens[i - 1]) {
-      dedupTokens.push(tokens[i]);
-    }
-  }
-  str = dedupTokens.join(' ');
-
-  // 2) 2개 이상의 단어로 이루어진 반복 구절 압축 (예: "화장실 어디예요 화장실 어디예요")
-  for (let phraseLen = 10; phraseLen >= 2; phraseLen--) {
-    const pTokens = str.split(/\s+/);
-    if (pTokens.length >= phraseLen * 2) {
-      for (let i = 0; i <= pTokens.length - phraseLen * 2; i++) {
-        const chunk1 = pTokens.slice(i, i + phraseLen).join(' ');
-        const chunk2 = pTokens.slice(i + phraseLen, i + phraseLen * 2).join(' ');
-        if (chunk1 === chunk2) {
-          pTokens.splice(i + phraseLen, phraseLen);
-          str = pTokens.join(' ');
-          break;
-        }
-      }
-    }
-  }
-
-  return str.trim();
-}
-
 function startVoiceTurn(speakerLang) {
-  if (isSessionProcessing) return;
-
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
     const micModal = document.getElementById('mic-guide-modal');
@@ -1933,25 +1952,39 @@ function startVoiceTurn(speakerLang) {
     return;
   }
 
-  // 모바일 오디오 재생 락 사전 해제
+  // 모바일 오디오 재생 락 즉시 사전 해제 (Autoplay Policy 필수 하네스)
   unlockAudio();
 
-  // 🛡️ 이전 오디오 낭독 강제 중단 (스피커 소리가 마이크로 들어가지 않도록 차단)
-  if (currentTtsAudio) {
-    try { currentTtsAudio.pause(); } catch(e) {}
-    currentTtsAudio = null;
+  // 🛡️ 마이크를 켤 때 이전 낭독 중이던 오디오 즉시 정지 (스피커 소리가 마이크로 재유입되는 현상 차단)
+  if (state.isSpeakingNow) {
+    if (currentTtsAudio) {
+      try { currentTtsAudio.pause(); } catch(e) {}
+      currentTtsAudio = null;
+    }
+    if ('speechSynthesis' in window) {
+      try { window.speechSynthesis.cancel(); } catch(e) {}
+    }
+    state.isSpeakingNow = false;
   }
-  if ('speechSynthesis' in window) {
-    try { window.speechSynthesis.cancel(); } catch(e) {}
+
+  // 기존 세션 깨끗이 정리
+  if (voiceTurnRec) {
+    try {
+      voiceTurnRec.onresult = null;
+      voiceTurnRec.onerror = null;
+      voiceTurnRec.onend = null;
+      voiceTurnRec.abort();
+    } catch(e) {}
+    voiceTurnRec = null;
   }
-  state.isSpeakingNow = false;
+  if (voiceSilenceTimer) {
+    clearTimeout(voiceSilenceTimer);
+    voiceSilenceTimer = null;
+  }
 
-  // 기존 세션 완전히 정리
-  cancelVoiceTurn();
-
-  activeVoiceSpeaker = speakerLang;
   voiceTurnBuffer = '';
-  isSessionProcessing = false;
+  activeVoiceSpeaker = speakerLang;
+  isTranslatingVoiceTurn = false;
 
   const koBtn = document.getElementById('voice-speak-ko-btn');
   const jaBtn = document.getElementById('voice-listen-ja-btn');
@@ -1988,43 +2021,30 @@ function startVoiceTurn(speakerLang) {
     const rec = new SpeechRecognition();
     voiceTurnRec = rec;
     rec.lang = speakerLang === 'ko' ? 'ko-KR' : 'ja-JP';
-    rec.continuous = false; // 🛡️ 단일 발화 모드: 여러 문장이 무한 누적되어 5번 반복되는 현상 원천 차단!
+    rec.continuous = true;
     rec.interimResults = true;
 
     rec.onstart = () => {};
 
     rec.onresult = (event) => {
-      // 🛡️ 세션이 이미 커밋되었거나 닫혔으면 잔여 패킷 즉시 폐기
-      if (isSessionProcessing || !activeVoiceSpeaker) return;
+      // 🛡️ 번역 중이거나 이미 세션이 닫혔으면 잔여 패킷 무시
+      if (isTranslatingVoiceTurn || !activeVoiceSpeaker) return;
 
-      let transcript = '';
-      let isFinalResult = false;
+      let fullTranscript = '';
       for (let i = 0; i < event.results.length; ++i) {
-        transcript += event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          isFinalResult = true;
-        }
+        fullTranscript += event.results[i][0].transcript;
       }
 
-      // 🛡️ 중복 단어/어구 자동 압축 필터 통과
-      const cleanSpoken = cleanRepeatedPhrases(transcript);
-      if (cleanSpoken) {
-        voiceTurnBuffer = cleanSpoken;
-        if (streamText) streamText.innerText = `🗣️ "${cleanSpoken}"`;
+      const currentSpoken = fullTranscript.trim();
+      if (currentSpoken) {
+        voiceTurnBuffer = currentSpoken;
+        if (streamText) streamText.innerText = `🗣️ "${currentSpoken}"`;
 
+        // ⏱️ 묵음 감지 타이머: 1400ms(1.4초)로 여유를 주어 말이 중간에 끊겨 2번 번역되는 현상 완벽 방지!
         if (voiceSilenceTimer) clearTimeout(voiceSilenceTimer);
-
-        if (isFinalResult) {
-          // 브라우저가 발화 종료를 확정함 -> 300ms 후 단 1회만 확정 번역 커밋!
-          voiceSilenceTimer = setTimeout(() => {
-            commitVoiceTurn();
-          }, 300);
-        } else {
-          // 말하는 중간 잠깐 쉬는 구간 -> 1000ms 묵음 감지 시 커밋
-          voiceSilenceTimer = setTimeout(() => {
-            commitVoiceTurn();
-          }, 1000);
-        }
+        voiceSilenceTimer = setTimeout(() => {
+          stopVoiceTurn(true);
+        }, 1400);
       }
     };
 
@@ -2034,47 +2054,50 @@ function startVoiceTurn(speakerLang) {
         const micModal = document.getElementById('mic-guide-modal');
         if (micModal) micModal.classList.add('active');
         else showToast('⚠️ 마이크 권한이 차단되었습니다. 브라우저 설정에서 마이크를 허용해 주세요.');
-        cancelVoiceTurn();
+        resetVoiceTurnUI();
       } else if (err.error === 'no-speech') {
-        // 무시
+        // 말이 잠시 멈춘 것은 타이머가 처리하므로 무시
       } else {
-        cancelVoiceTurn();
+        resetVoiceTurnUI();
       }
     };
 
     rec.onend = () => {
-      // 🛡️ 자연 종료 시: 아직 커밋 안 되었고 말이 있으면 커밋, 아니면 정리
-      if (!isSessionProcessing && activeVoiceSpeaker && voiceTurnBuffer.trim()) {
-        commitVoiceTurn();
-      } else if (!isSessionProcessing) {
-        cancelVoiceTurn();
+      if (activeVoiceSpeaker) {
+        if (voiceTurnBuffer && !isTranslatingVoiceTurn) {
+          stopVoiceTurn(true);
+        } else {
+          resetVoiceTurnUI();
+        }
       }
     };
 
     rec.start();
   } catch (err) {
     console.error('STT Start Error:', err);
-    cancelVoiceTurn();
+    resetVoiceTurnUI();
     showToast('마이크를 시작할 수 없습니다.');
   }
 }
 
-// 🛡️ [핵심] 단방향 세션 커밋: 타이머/버튼/onend 중 가장 먼저 도달한 단 1회만 실행 보장!
-function commitVoiceTurn() {
-  if (isSessionProcessing) return; // 🔒 2차, 3차 호출 100% 원천 차단!
-  isSessionProcessing = true;
+let lastRequestedText = '';
+let lastRequestedTimestamp = 0;
 
+function stopVoiceTurn(doTranslate = false) {
   if (voiceSilenceTimer) {
     clearTimeout(voiceSilenceTimer);
     voiceSilenceTimer = null;
   }
-
-  const textToTranslate = (voiceTurnBuffer || '').trim();
+  const textToTranslate = voiceTurnBuffer.trim();
   const currentSpeaker = activeVoiceSpeaker;
 
-  // 🛡️ 마이크 하드웨어 및 모든 이벤트 리스너 즉시 완전 소멸 (연쇄 이벤트 완전 차단)
+  // 🛡️ 버퍼와 스피커 상태 즉시 초기화 (중복 실행 원천 차단)
+  voiceTurnBuffer = '';
+  activeVoiceSpeaker = null;
+
   if (voiceTurnRec) {
     try {
+      // 🛡️ 모든 이벤트 리스너를 완전히 끊어서 잔여 패킷으로 인한 2차 번역 완전 차단!
       voiceTurnRec.onresult = null;
       voiceTurnRec.onerror = null;
       voiceTurnRec.onend = null;
@@ -2083,39 +2106,15 @@ function commitVoiceTurn() {
     voiceTurnRec = null;
   }
 
-  voiceTurnBuffer = '';
-  activeVoiceSpeaker = null;
   resetVoiceTurnUI();
 
-  if (textToTranslate && currentSpeaker) {
+  if (doTranslate && textToTranslate && currentSpeaker) {
     triggerVoiceTranslate(textToTranslate, currentSpeaker);
-  } else {
-    isSessionProcessing = false;
   }
-}
-
-// 🛡️ 음성 세션 취소 및 청소
-function cancelVoiceTurn() {
-  if (voiceSilenceTimer) {
-    clearTimeout(voiceSilenceTimer);
-    voiceSilenceTimer = null;
-  }
-  if (voiceTurnRec) {
-    try {
-      voiceTurnRec.onresult = null;
-      voiceTurnRec.onerror = null;
-      voiceTurnRec.onend = null;
-      voiceTurnRec.abort();
-    } catch(e) {}
-    voiceTurnRec = null;
-  }
-  voiceTurnBuffer = '';
-  activeVoiceSpeaker = null;
-  isSessionProcessing = false;
-  resetVoiceTurnUI();
 }
 
 function resetVoiceTurnUI() {
+  activeVoiceSpeaker = null;
   const koBtn = document.getElementById('voice-speak-ko-btn');
   const jaBtn = document.getElementById('voice-listen-ja-btn');
   const koIcon = document.getElementById('voice-ko-mic-icon');
@@ -2133,19 +2132,17 @@ function resetVoiceTurnUI() {
 
 async function triggerVoiceTranslate(text, fromLang) {
   const cleanText = (text || '').trim();
-  if (!cleanText) {
-    isSessionProcessing = false;
-    return;
-  }
+  if (!cleanText || isTranslatingVoiceTurn) return;
 
   // 🛡️ 동일 문장 1.5초 내 중복 번역 방지 (두 번 나오는 현상 원천 차단)
   const now = Date.now();
   if (cleanText === lastRequestedText && (now - lastRequestedTimestamp) < 1500) {
-    isSessionProcessing = false;
     return;
   }
   lastRequestedText = cleanText;
   lastRequestedTimestamp = now;
+
+  isTranslatingVoiceTurn = true;
 
   const toLang = fromLang === 'ko' ? 'ja' : 'ko';
   const streamBox = document.getElementById('voice-stream-box');
@@ -2304,8 +2301,8 @@ async function triggerVoiceTranslate(text, fromLang) {
     console.error('triggerVoiceTranslate error:', outerErr);
     showToast('⚠️ 번역 중 오류가 발생했습니다. 다시 시도해 주세요.');
   } finally {
-    // 🛡️ 어떤 에러가 발생해도 락을 100% 해제하여 다음 발화 대기
-    isSessionProcessing = false;
+    // 🛡️ 어떤 에러가 발생해도 락을 100% 해제하여 영구 먹통 방지
+    isTranslatingVoiceTurn = false;
     if (streamBox) streamBox.style.display = 'none';
   }
 }
@@ -2715,15 +2712,13 @@ function setupEventListeners() {
   }
 
   const voiceNowBtn = document.getElementById('voice-now-action-btn');
-  if (voiceNowBtn) voiceNowBtn.addEventListener('click', () => commitVoiceTurn());
+  if (voiceNowBtn) voiceNowBtn.addEventListener('click', () => stopVoiceTurn(true));
 
   const voiceRespeakBtn = document.getElementById('voice-respeak-btn');
   if (voiceRespeakBtn) {
     voiceRespeakBtn.addEventListener('click', () => {
       if (lastTranslatedText) {
         unlockAudio();
-        state.isSpeakingNow = false;
-        lastSpokenText = ''; // 🛡️ 누를 때마다 즉시 100% 강제 재생
         speakText(lastTranslatedText, lastTranslatedLang);
       } else {
         showToast('먼저 말씀해주세요.');
