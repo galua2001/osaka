@@ -1876,154 +1876,37 @@ function setupEventListeners() {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
 
-  // 번역 관련
-  const swapBtn = document.getElementById('swap-lang-btn');
-  if (swapBtn) swapBtn.addEventListener('click', swapLanguages);
+  // 네이버 파파고 전용 이벤트 리스너
+  const papagoQuickInput = document.getElementById('papago-quick-input');
+  const papagoSendBtn = document.getElementById('papago-send-btn');
 
-  const translateBtn = document.getElementById('translate-btn');
-  if (translateBtn) translateBtn.addEventListener('click', () => performTranslation());
+  function sendToPapago() {
+    const text = papagoQuickInput ? papagoQuickInput.value.trim() : '';
+    const url = text 
+      ? `https://papago.naver.com/?sk=ko&tk=ja&st=${encodeURIComponent(text)}`
+      : 'https://papago.naver.com/?sk=ko&tk=ja';
+    window.open(url, '_blank');
+  }
 
-  // 양방향 실시간 대화 통역 (내가 한국어로 말하기 & 상대방 일본어로 답변 듣기)
-  const dualKoBtn = document.getElementById('dual-speak-ko-btn');
-  if (dualKoBtn) {
-    dualKoBtn.addEventListener('click', () => {
-      unlockAudio();
-      if (state.dualTurnSpeaker === 'ko') {
-        const buffered = (recognizedTextBuffer || document.getElementById('source-text')?.value || '').trim();
-        if (buffered && typeof window.executeDualTranslationNow === 'function') {
-          // 이미 말한 내용이 있으면 터치 시 취소하지 않고 즉시 번역 실행!
-          window.executeDualTranslationNow(buffered);
-        } else {
-          stopDualTurn(true);
-        }
-      } else {
-        startDualTurn('ko');
+  if (papagoSendBtn) papagoSendBtn.addEventListener('click', sendToPapago);
+  if (papagoQuickInput) {
+    papagoQuickInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        sendToPapago();
       }
     });
   }
 
-  const dualJaBtn = document.getElementById('dual-listen-ja-btn');
-  if (dualJaBtn) {
-    dualJaBtn.addEventListener('click', () => {
-      unlockAudio();
-      if (state.dualTurnSpeaker === 'ja') {
-        const buffered = (recognizedTextBuffer || document.getElementById('source-text')?.value || '').trim();
-        if (buffered && typeof window.executeDualTranslationNow === 'function') {
-          window.executeDualTranslationNow(buffered);
-        } else {
-          stopDualTurn(true);
-        }
-      } else {
-        startDualTurn('ja');
-      }
-    });
-  }
-
-  // 실시간 청취 배너의 [⚡ 지금 번역] 및 [중단/취소] 버튼
-  const dualNowBtn = document.getElementById('dual-now-btn');
-  if (dualNowBtn) {
-    dualNowBtn.addEventListener('click', () => {
-      unlockAudio();
-      const buffered = (recognizedTextBuffer || document.getElementById('source-text')?.value || '').trim();
-      if (buffered && typeof window.executeDualTranslationNow === 'function') {
-        window.executeDualTranslationNow(buffered);
-      } else {
-        performTranslation(false);
-      }
-    });
-  }
-
-  const dualStopBtn = document.getElementById('dual-stop-btn');
-  if (dualStopBtn) {
-    dualStopBtn.addEventListener('click', () => {
-      stopDualTurn(true);
-      updateMonitorUI('idle', '대화 통역 중단됨', '버튼을 눌러 다시 시작할 수 있습니다.');
-    });
-  }
-
-  // 원클릭 현지 필수 표현 칩 이벤트
-  document.querySelectorAll('.instant-chip').forEach(chip => {
-    chip.addEventListener('click', async () => {
-      unlockAudio();
-      const speakMsg = chip.dataset.speak;
-      const inputEl = document.getElementById('source-text');
-      if (inputEl) inputEl.value = speakMsg;
-      updateMonitorUI('translating', '원클릭 번역 실행 중... ⏳', `선택: "${speakMsg}"`);
-      await performTranslation(false);
+  // 파파고 원클릭 필수 표현 칩
+  document.querySelectorAll('.papago-phrase-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const phrase = chip.dataset.phrase;
+      if (papagoQuickInput) papagoQuickInput.value = phrase;
+      const url = `https://papago.naver.com/?sk=ko&tk=ja&st=${encodeURIComponent(phrase)}`;
+      window.open(url, '_blank');
     });
   });
-
-  // 타이핑 시 실시간 번역 (디바운스 400ms)
-  const sourceText = document.getElementById('source-text');
-  if (sourceText) {
-    sourceText.addEventListener('input', () => {
-      if (!state.liveTranslate) return;
-      if (state.liveDebounceTimer) clearTimeout(state.liveDebounceTimer);
-
-      const val = sourceText.value.trim();
-      updatePapagoLink(val);
-      if (!val) {
-        const targetTextEl = document.getElementById('target-text');
-        const pronounceBox = document.getElementById('pronounce-box');
-        if (targetTextEl) targetTextEl.innerText = '번역 결과가 여기에 표시됩니다.';
-        if (pronounceBox) pronounceBox.style.display = 'none';
-        return;
-      }
-
-      state.liveDebounceTimer = setTimeout(() => {
-        performTranslation(true);
-      }, 400);
-    });
-
-    sourceText.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        performTranslation(false);
-      }
-    });
-  }
-
-  const clearBtn = document.getElementById('clear-text-btn');
-  if (clearBtn) {
-    clearBtn.addEventListener('click', () => {
-      const el = document.getElementById('source-text');
-      if (el) { el.value = ''; el.focus(); }
-      const targetTextEl = document.getElementById('target-text');
-      const pronounceBox = document.getElementById('pronounce-box');
-      if (targetTextEl) targetTextEl.innerText = '번역 결과가 여기에 표시됩니다.';
-      if (pronounceBox) pronounceBox.style.display = 'none';
-    });
-  }
-
-  const micBtn = document.getElementById('mic-btn');
-  if (micBtn) micBtn.addEventListener('click', toggleSpeechRecognition);
-
-  const speakResultBtn = document.getElementById('speak-result-btn');
-  if (speakResultBtn) {
-    speakResultBtn.addEventListener('click', () => {
-      const text = document.getElementById('target-text').innerText;
-      speakText(text, state.targetLang);
-    });
-  }
-
-  const repeatSpeakBtn = document.getElementById('repeat-speak-btn');
-  if (repeatSpeakBtn) {
-    repeatSpeakBtn.addEventListener('click', () => {
-      const text = document.getElementById('target-text').innerText;
-      speakText(text, state.targetLang);
-    });
-  }
-
-  const copyResultBtn = document.getElementById('copy-result-btn');
-  if (copyResultBtn) {
-    copyResultBtn.addEventListener('click', () => {
-      const text = document.getElementById('target-text').innerText;
-      copyToClipboard(text);
-    });
-  }
-
-  const showModalBtn = document.getElementById('show-fullscreen-btn');
-  if (showModalBtn) showModalBtn.addEventListener('click', openShowingModalFromTranslation);
 
   // 지도 & 길찾기 관련
   const mapMicBtn = document.getElementById('map-mic-btn');

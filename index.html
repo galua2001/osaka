@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   
   <!-- 앱 스타일시트 -->
-  <link rel="stylesheet" href="style.css?v=3.1">
+  <link rel="stylesheet" href="style.css?v=4.0">
   <link rel="icon" href="icon-192.png">
 </head>
 <body>
@@ -41,7 +41,7 @@
             <span>OsakaGo</span>
             <span style="font-size: 20px;">🐙</span>
           </h1>
-          <p class="header-subtitle">오사카 여행 번역기 · 음성 길찾기 · 현지 맛집</p>
+          <p class="header-subtitle">오사카 여행 · 파파고 통역 · 길찾기 지도 · 현지 맛집</p>
         </div>
         <span class="header-subbadge">오사카 가이드</span>
       </div>
@@ -65,175 +65,77 @@
     <!-- 2. 메인 콘텐츠 영역 -->
     <main class="content-wrapper">
 
-      <!-- ================= TAB 1: 실시간 양방향 번역기 ================= -->
+      <!-- ================= TAB 1: 네이버 파파고(Papago) 공식 통역 ================= -->
       <section id="pane-translate" class="tab-pane active">
-        
-        <!-- 언어 선택 및 전환 바 -->
-        <div class="lang-selector-bar">
-          <div class="lang-pill" id="src-lang-label">🇰🇷 한국어</div>
-          <button class="lang-swap-btn" id="swap-lang-btn" title="언어 방향 바꾸기">
-            ⇄
-          </button>
-          <div class="lang-pill" id="tgt-lang-label">🇯🇵 日本語</div>
-        </div>
 
-        <!-- 실시간 양방향 대화 통역 (내가 말하기 & 상대방 일본어 답변 듣기) -->
-        <div class="dual-talk-card">
-          <div class="dual-talk-header">
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <span class="dual-badge">🔄 양방향 실시간 통역</span>
-              <span class="dual-tip-badge">티키타카 대화</span>
+        <!-- 🦜 파파고 원클릭 실행 메인 히어로 카드 -->
+        <div class="papago-hero-card">
+          <div class="papago-hero-badge">
+            <span>🦜</span>
+            <span>네이버 공식 통역 엔진</span>
+          </div>
+          <h2 class="papago-hero-title">네이버 파파고 (Papago)</h2>
+          <p class="papago-hero-desc">오사카 여행 실시간 한국어 ⇄ 일본어 음성 & 텍스트 통역</p>
+
+          <!-- 1초 바로 실행 메인 큰 버튼 -->
+          <a href="https://papago.naver.com/?sk=ko&tk=ja" target="_blank" rel="noopener noreferrer" class="papago-main-launch-btn" id="papago-hero-btn">
+            <span class="launch-icon">🦜</span>
+            <div class="launch-text-col">
+              <span class="launch-title">네이버 파파고 바로 열기 ➔</span>
+              <span class="launch-sub">터치하면 파파고 웹/앱이 즉시 실행됩니다</span>
             </div>
-            <span class="dual-subinfo">내가 말하고 ➔ 상대방 답변까지 한국어로 듣기!</span>
-          </div>
-
-          <div class="dual-btn-grid">
-            <!-- 1. 내가 한국어로 말하기 -->
-            <button class="dual-btn ko" id="dual-speak-ko-btn" title="한국어로 말하면 일본어로 번역되어 상대방에게 소리로 들려줍니다">
-              <div class="dual-icon-circle">🇰🇷 ➔ 🇯🇵</div>
-              <div class="dual-btn-label">내가 한국어로 말하기</div>
-              <div class="dual-btn-status" id="dual-ko-status">터치하여 말하기</div>
-            </button>
-
-            <!-- 2. 상대방 일본어로 답변 듣기 -->
-            <button class="dual-btn ja" id="dual-listen-ja-btn" title="상대방이 일본어로 말하면 한국어로 번역되어 나에게 소리로 들려줍니다">
-              <div class="dual-icon-circle">🇯🇵 ➔ 🇰🇷</div>
-              <div class="dual-btn-label">상대방 일본어로 답변 듣기</div>
-              <div class="dual-btn-status" id="dual-ja-status">터치하여 답변 듣기</div>
-            </button>
-          </div>
-
-          <!-- 자동 핑퐁 (티키타카 대화) 모드 토글 -->
-          <div class="pingpong-option-row">
-            <label class="pingpong-check-label" title="내 말이 끝나면 자동으로 상대방 일본어 답변 대기로 전환됩니다">
-              <input type="checkbox" id="auto-pingpong-check">
-              <span>🔄 <strong>자동 티키타카 모드:</strong> 내가 말한 뒤 자동으로 상대방 답변 대기로 전환</span>
-            </label>
-          </div>
-
-          <!-- 실시간 청취 상태 안내 배너 -->
-          <div class="dual-live-banner" id="dual-live-banner" style="display: none;">
-            <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
-              <span class="live-pulse-dot"></span>
-              <span id="dual-live-banner-text" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">한국어로 말씀하세요...</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
-              <button class="dual-now-btn" id="dual-now-btn" title="말씀을 마치셨다면 즉시 번역합니다">⚡ 지금 번역</button>
-              <button class="dual-stop-btn" id="dual-stop-btn">취소</button>
-            </div>
-          </div>
-
-          <!-- 🎙️ 실시간 음성 진단 모니터 (스마트폰 상태 중계) -->
-          <div class="voice-live-monitor" id="voice-live-monitor">
-            <div class="vlm-header">
-              <span class="vlm-indicator" id="vlm-indicator">⚪ 대기</span>
-              <span class="vlm-status" id="vlm-status">마이크 대기 중입니다.</span>
-            </div>
-            <div class="vlm-text" id="vlm-text">위 버튼을 누르고 말씀하시면 여기에 실시간으로 텍스트가 찍힙니다.</div>
-          </div>
-
-          <!-- ⚡ 마이크 없이 바로 말하는 원클릭 필수 표현 칩 -->
-          <div class="instant-talk-section">
-            <span class="instant-talk-title">⚡ 원클릭 현지 말하기 (터치 즉시 일본어로 낭독):</span>
-            <div class="instant-talk-chips">
-              <button class="instant-chip" data-speak="이거 주세요">👉 이거 주세요</button>
-              <button class="instant-chip" data-speak="얼마예요?">💰 얼마예요?</button>
-              <button class="instant-chip" data-speak="와사비 빼주세요">🍣 와사비 빼주세요</button>
-              <button class="instant-chip" data-speak="계산해 주세요">🧾 계산해 주세요</button>
-              <button class="instant-chip" data-speak="화장실 어디예요?">🚻 화장실 어디예요?</button>
-              <button class="instant-chip" data-speak="감사합니다">🙏 감사합니다</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- 번역 입력 카드 (직접 입력도 가능) -->
-        <div class="trans-card">
-          <textarea 
-            id="source-text" 
-            class="trans-input" 
-            placeholder="번역할 한국어나 일본어를 입력하세요.&#10;(예: 도톤보리 맛집 추천해주세요, 와사비 빼주세요)"
-          ></textarea>
-
-          <div class="card-actions">
-            <div class="action-btn-group">
-              <button class="icon-btn" id="clear-text-btn" title="지우기">
-                <span>✕</span> 지우기
-              </button>
-              <button class="icon-btn mic-btn" id="mic-btn" title="음성으로 말하기">
-                <span>🎤</span> 음성입력
-              </button>
-            </div>
-            <div style="font-size: 11px; color: #94A3B8;">Enter 키로 번역</div>
-          </div>
-        </div>
-
-        <!-- 번역 옵션 바 (자동 음성 읽기 토글) -->
-        <div class="trans-option-bar">
-          <label class="auto-speak-toggle" title="번역 완료 시 자동으로 일본어 발음을 읽어줍니다">
-            <input type="checkbox" id="auto-speak-check" checked>
-            <span>번역 즉시 일본어 발음 자동 재생 🔊</span>
-          </label>
-        </div>
-
-        <!-- 번역 실행 버튼 -->
-        <button class="translate-main-btn" id="translate-btn">
-          <span>⚡</span>
-          <span>지금 바로 번역하기</span>
-        </button>
-
-        <!-- 번역 결과 카드 -->
-        <div class="result-card" id="result-card">
-          <div class="result-header">
-            <span class="result-tag" id="result-lang-tag">🇯🇵 日本語</span>
-            <div class="action-btn-group">
-              <button class="icon-btn primary" id="speak-result-btn" title="현지 발음 듣기">
-                <span>🔊</span> 소리 듣기
-              </button>
-              <button class="icon-btn" id="copy-result-btn" title="복사하기">
-                <span>📋</span> 복사
-              </button>
-            </div>
-          </div>
-
-          <!-- 일본어/한국어 결과 원문 -->
-          <div class="result-text" id="target-text">번역 결과가 여기에 표시됩니다.</div>
-          
-          <!-- 크고 선명한 한글 발음(따라 읽기) 상자 -->
-          <div class="pronounce-box" id="pronounce-box" style="display: none;">
-            <div class="pronounce-label-row">
-              <span class="pronounce-badge">🗣️ 한글 발음 (따라 읽기)</span>
-              <button class="pronounce-repeat-btn" id="repeat-speak-btn" title="일본어 발음 다시 듣기">
-                <span>🔊</span> 다시 듣기
-              </button>
-            </div>
-            <div class="pronounce-text" id="target-reading"></div>
-          </div>
-
-          <!-- 현지인에게 크게 보여주기 버튼 -->
-          <div style="margin-top: 14px; text-align: right;">
-            <button class="big-show-btn" id="show-fullscreen-btn">
-              <span>📱</span>
-              <span>현지인에게 크게 보여주기</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- 🦜 네이버 파파고(Papago) 공식 앱/웹 원클릭 연동 카드 -->
-        <div class="papago-connect-card">
-          <div class="papago-card-header">
-            <span class="papago-badge">🦜 네이버 파파고 연동</span>
-            <span class="papago-subinfo">네이버 공식 엔진으로 바로 열기</span>
-          </div>
-          <a href="https://papago.naver.com/?sk=ko&tk=ja" target="_blank" rel="noopener noreferrer" class="papago-link-btn" id="papago-direct-btn" title="터치하면 네이버 파파고가 열립니다">
-            <div class="papago-btn-content">
-              <span class="papago-logo">🦜</span>
-              <div class="papago-btn-texts">
-                <span class="papago-main-text">네이버 파파고(Papago) 바로 열기</span>
-                <span class="papago-hint-text" id="papago-hint-text">위 입력창에 적힌 문장을 파파고로 그대로 보냅니다</span>
-              </div>
-            </div>
-            <span class="papago-arrow">➔</span>
+            <span class="launch-arrow">⚡</span>
           </a>
+        </div>
+
+        <!-- 📝 문장 입력 후 파파고로 바로 번역하기 카드 -->
+        <div class="papago-input-card">
+          <div class="papago-card-title-row">
+            <span class="papago-card-title">✏️ 문장 적어서 파파고로 번역하기</span>
+            <span class="papago-sub-tip">입력 후 [보내기] 터치</span>
+          </div>
+          <div class="papago-input-wrapper">
+            <input 
+              type="text" 
+              id="papago-quick-input" 
+              class="papago-quick-input" 
+              placeholder="예: 와사비 빼주세요, 얼마예요?"
+            />
+            <button class="papago-send-btn" id="papago-send-btn" title="파파고로 보내기">
+              <span>보내기 ➔</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ⚡ 오사카 현지 원클릭 필수 표현 (터치 즉시 파파고로 연결) -->
+        <div class="papago-quick-section">
+          <div class="papago-quick-title">
+            <span>⚡</span>
+            <span>원클릭 현지 필수 표현 (터치 시 파파고로 바로 번역):</span>
+          </div>
+          <div class="papago-chip-grid">
+            <button class="papago-phrase-chip" data-phrase="이거 얼마예요?">💰 얼마예요?</button>
+            <button class="papago-phrase-chip" data-phrase="와사비 빼주세요">🍣 와사비 빼주세요</button>
+            <button class="papago-phrase-chip" data-phrase="이거 하나 주세요">👉 이거 하나 주세요</button>
+            <button class="papago-phrase-chip" data-phrase="계산해 주세요">🧾 계산해 주세요</button>
+            <button class="papago-phrase-chip" data-phrase="화장실 어디예요?">🚻 화장실 어디예요?</button>
+            <button class="papago-phrase-chip" data-phrase="카드 결제 되나요?">💳 카드 되나요?</button>
+            <button class="papago-phrase-chip" data-phrase="생맥주 한 잔 주세요">🍺 생맥주 한 잔</button>
+            <button class="papago-phrase-chip" data-phrase="감사합니다">🙏 감사합니다</button>
+          </div>
+        </div>
+
+        <!-- 💡 여행 팁 안내 카드 -->
+        <div class="papago-tip-card">
+          <div class="tip-card-header">
+            <span>💡</span>
+            <strong>오사카 여행 통역 안내</strong>
+          </div>
+          <ul class="papago-tip-list">
+            <li>스마트폰에 <strong>네이버 파파고 앱</strong>이 있으면 앱으로 바로 열려 음성 통역을 편하게 쓰실 수 있습니다.</li>
+            <li>앱이 없어도 크롬 브라우저에서 <strong>네이버 공식 웹페이지</strong>로 완벽하게 통역됩니다.</li>
+            <li>길찾기나 맛집 정보는 하단의 <strong>[🗺️ 길찾기·지도]</strong>와 <strong>[🍽️ 맛집추천]</strong> 메뉴를 누르시면 언제든 보실 수 있습니다!</li>
+          </ul>
         </div>
 
       </section>
@@ -443,8 +345,8 @@
     <!-- 3. 하단 5개 탭 내비게이션 바 -->
     <nav class="bottom-nav">
       <button class="nav-item active" data-tab="translate">
-        <span class="icon">🔤</span>
-        <span class="label">번역기</span>
+        <span class="icon">🦜</span>
+        <span class="label">파파고</span>
       </button>
       <button class="nav-item" data-tab="map">
         <span class="icon">🗺️</span>
@@ -559,7 +461,7 @@
   <!-- Leaflet 지도 JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <!-- 메인 앱 스크립트 연결 -->
-  <script src="app.js?v=3.1"></script>
+  <script src="app.js?v=4.0"></script>
 
   <!-- PWA 서비스 워커 및 앱 설치 제어 -->
   <script>

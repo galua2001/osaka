@@ -1800,86 +1800,236 @@ body {
   transform: scale(0.96);
 }
 
-/* 🦜 네이버 파파고 공식 연동 카드 */
-.papago-connect-card {
-  background: linear-gradient(135deg, rgba(3, 199, 90, 0.08) 0%, #FFFFFF 100%);
-  border: 1.5px solid rgba(3, 199, 90, 0.3);
-  border-radius: var(--radius-md);
-  padding: 12px 14px;
-  margin-top: 14px;
+/* ================= 1. 네이버 파파고 전용 섹션 ================= */
+.papago-hero-card {
+  background: linear-gradient(135deg, #03C75A 0%, #009E44 100%);
+  border-radius: var(--radius-lg);
+  padding: 20px 16px;
+  color: #FFFFFF;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(3, 199, 90, 0.28);
   margin-bottom: 14px;
 }
 
-.papago-card-header {
-  display: flex;
+.papago-hero-badge {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 20px;
+  padding: 3px 12px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
   margin-bottom: 8px;
 }
 
-.papago-badge {
-  background: #03C75A;
-  color: #FFFFFF;
-  font-size: 11px;
-  font-weight: 800;
-  padding: 2px 7px;
-  border-radius: 6px;
+.papago-hero-title {
+  font-size: 22px;
+  font-weight: 900;
+  margin: 0 0 4px;
+  letter-spacing: -0.5px;
 }
 
-.papago-subinfo {
+.papago-hero-desc {
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0 0 16px;
+}
+
+.papago-main-launch-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #FFFFFF;
+  color: #03C75A;
+  text-decoration: none;
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s ease;
+}
+
+.papago-main-launch-btn:active {
+  transform: scale(0.97);
+  background: #F0FDF4;
+}
+
+.launch-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+}
+
+.launch-text-col {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  flex: 1;
+  margin: 0 12px;
+}
+
+.launch-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: #0F172A;
+}
+
+.launch-sub {
+  font-size: 11px;
+  font-weight: 600;
+  color: #03C75A;
+  margin-top: 2px;
+}
+
+.launch-arrow {
+  font-size: 18px;
+  font-weight: 900;
+  color: #03C75A;
+}
+
+/* 문장 입력 카드 */
+.papago-input-card {
+  background: #FFFFFF;
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  margin-bottom: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.papago-card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.papago-card-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #1E293B;
+}
+
+.papago-sub-tip {
   font-size: 11px;
   color: #64748B;
   font-weight: 600;
 }
 
-.papago-link-btn {
+.papago-input-wrapper {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  background: #03C75A;
-  color: #FFFFFF;
-  text-decoration: none;
-  border-radius: 12px;
-  padding: 10px 14px;
-  box-shadow: 0 4px 12px rgba(3, 199, 90, 0.25);
-  transition: all 0.2s ease;
+  gap: 8px;
 }
 
-.papago-link-btn:active {
-  transform: scale(0.98);
+.papago-quick-input {
+  flex: 1;
+  border: 1.5px solid #CBD5E1;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13.5px;
+  color: #0F172A;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+.papago-quick-input:focus {
+  border-color: #03C75A;
+}
+
+.papago-send-btn {
+  background: #03C75A;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.papago-send-btn:active {
+  transform: scale(0.96);
   background: #02b150;
 }
 
-.papago-btn-content {
+/* 필수 표현 칩 섹션 */
+.papago-quick-section {
+  background: #FFFFFF;
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  margin-bottom: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.papago-quick-title {
   display: flex;
   align-items: center;
-  gap: 10px;
-}
-
-.papago-logo {
-  font-size: 22px;
-}
-
-.papago-btn-texts {
-  display: flex;
-  flex-direction: column;
-  text-align: left;
-}
-
-.papago-main-text {
+  gap: 6px;
   font-size: 13px;
   font-weight: 800;
+  color: #1E293B;
+  margin-bottom: 10px;
+}
+
+.papago-chip-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.papago-phrase-chip {
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #334155;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.papago-phrase-chip:active {
+  background: #03C75A;
   color: #FFFFFF;
+  border-color: #03C75A;
+  transform: scale(0.97);
 }
 
-.papago-hint-text {
-  font-size: 10.5px;
-  color: rgba(255, 255, 255, 0.88);
-  margin-top: 1px;
+/* 팁 카드 */
+.papago-tip-card {
+  background: #F0FDF4;
+  border: 1.5px solid #BBF7D0;
+  border-radius: var(--radius-md);
+  padding: 14px;
+  margin-bottom: 14px;
 }
 
-.papago-arrow {
-  font-size: 15px;
+.tip-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
   font-weight: 800;
-  color: #FFFFFF;
+  color: #15803D;
+  margin-bottom: 8px;
+}
+
+.papago-tip-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: #166534;
+  line-height: 1.6;
+}
+
+.papago-tip-list li {
+  margin-bottom: 4px;
 }
