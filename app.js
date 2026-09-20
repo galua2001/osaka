@@ -1685,6 +1685,7 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
       }
       
       currentTtsAudio = audio;
+      audio.referrerPolicy = 'no-referrer'; // 🚨 이거 없으면 구글에서 404 에러 띄우고 차단함!!
       audio.src = ttsUrl;
 
       audio.onended = () => { clearTimeout(safetyTimeout); finishSpeech(); };
