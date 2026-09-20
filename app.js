@@ -583,10 +583,11 @@ function startDualTurn(speakerLang) {
     function removeStutterWords(str) {
       if (!str) return str;
       const words = str.trim().split(/\s+/);
+      const stripPunc = (s) => s.replace(/[.,?!~요다까]/g, '');
       for (let len = Math.floor(words.length / 2); len >= 1; len--) {
           const firstHalf = words.slice(0, len).join('');
           const secondHalf = words.slice(len, len * 2).join('');
-          if (firstHalf === secondHalf) {
+          if (stripPunc(firstHalf) === stripPunc(secondHalf)) {
               return words.slice(len).join(' ');
           }
       }
@@ -653,14 +654,18 @@ function startDualTurn(speakerLang) {
     let currentText = '';
     let isFinal = false;
 
+    const stripPunc = (s) => s.replace(/[.,?!~요다까]/g, '').trim();
     for (let i = 0; i < event.results.length; ++i) {
       let chunk = event.results[i][0].transcript;
-      let trimmedChunk = chunk.trim();
-      let trimmedFull = currentText.trim();
       
-      if (trimmedFull && trimmedChunk.startsWith(trimmedFull)) {
+      let rawChunk = chunk.trim();
+      let rawFull = currentText.trim();
+      let cleanChunk = stripPunc(rawChunk);
+      let cleanFull = stripPunc(rawFull);
+      
+      if (cleanFull && cleanChunk.startsWith(cleanFull)) {
         currentText = chunk;
-      } else if (trimmedFull && trimmedFull.endsWith(trimmedChunk)) {
+      } else if (cleanFull && cleanFull.endsWith(cleanChunk)) {
         // 무시
       } else {
         currentText += chunk;
@@ -1993,6 +1998,7 @@ function startVoiceTurn(speakerLang) {
     state.isSpeakingNow = false;
   }
 
+  isAbortingVoiceTurn = false;
   // 기존 세션 깨끗이 정리
   if (voiceTurnRec) {
     try {
@@ -2057,15 +2063,19 @@ function startVoiceTurn(speakerLang) {
       if (isTranslatingVoiceTurn || !activeVoiceSpeaker) return;
 
       let fullTranscript = '';
+      const stripPunc = (s) => s.replace(/[.,?!~요다까]/g, '').trim();
       for (let i = 0; i < event.results.length; ++i) {
         let chunk = event.results[i][0].transcript;
-        let trimmedChunk = chunk.trim();
-        let trimmedFull = fullTranscript.trim();
         
-        if (trimmedFull && trimmedChunk.startsWith(trimmedFull)) {
-          // 안드로이드 크롬 누적 버그: 이전 텍스트가 이미 포함되어 있으면 덮어씀
+        let rawChunk = chunk.trim();
+        let rawFull = fullTranscript.trim();
+        let cleanChunk = stripPunc(rawChunk);
+        let cleanFull = stripPunc(rawFull);
+        
+        if (cleanFull && cleanChunk.startsWith(cleanFull)) {
+          // 안드로이드 크롬 누적 버그: 이전 텍스트가 이미 포함되어 있으면 덮어씀 (문장부호 무시)
           fullTranscript = chunk;
-        } else if (trimmedFull && trimmedFull.endsWith(trimmedChunk)) {
+        } else if (cleanFull && cleanFull.endsWith(cleanChunk)) {
           // 완전 중복 무시
         } else {
           // 정상적인 조각 이어붙이기
@@ -2087,15 +2097,13 @@ function startVoiceTurn(speakerLang) {
     };
 
     rec.onerror = (err) => {
-      console.warn('Voice STT Error:', err);
       if (err.error === 'not-allowed' || err.error === 'service-not-allowed') {
-        const micModal = document.getElementById('mic-guide-modal');
-        if (micModal) micModal.classList.add('active');
-        else showToast('⚠️ 마이크 권한이 차단되었습니다. 브라우저 설정에서 마이크를 허용해 주세요.');
-        resetVoiceTurnUI();
-      } else if (err.error === 'no-speech') {
-        // 말이 잠시 멈춘 것은 타이머가 처리하므로 무시
-      } else {
+        alert('🎙️ 마이크 권한이 차단되었거나 지원하지 않는 브라우저입니다!\n\n💡 카카오톡 앱 등이라면 우측 상단/하단 메뉴를 눌러\n👉 [다른 브라우저로 열기] (삼성 인터넷 등)를 선택해주세요.');
+      }
+      if (err.error !== 'no-speech' && err.error !== 'aborted') {
+        if (streamText) streamText.innerText = `[오류 발생] ${err.error}`;
+      }
+      if (err.error !== 'no-speech') {
         resetVoiceTurnUI();
       }
     };
@@ -2110,6 +2118,22 @@ function startVoiceTurn(speakerLang) {
       }
     };
 
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // 오디오 스트림은 권한 확인용이므로 즉시 닫습니다.
+      stream.getTracks().forEach(track => track.stop());
+    } catch (err) {
+      console.error('Mic permission error:', err);
+      resetVoiceTurnUI();
+      if (err.name === 'NotAllowedError' || err.name === 'NotFoundError' || err.name === 'TypeError') {
+        alert('🎙️ 마이크 권한이 차단되었거나 지원하지 않는 브라우저입니다!\n\n💡 카카오톡/네이버 앱 내부 창이라면 우측 하단/상단의 [⋮] 메뉴를 눌러\n👉 [다른 브라우저로 열기] (삼성 인터넷 등)를 선택해주세요.');
+      } else {
+        alert('🎙️ 마이크를 시작할 수 없습니다: ' + err.name);
+      }
+      return;
+    }
+
     rec.start();
   } catch (err) {
     console.error('STT Start Error:', err);
@@ -2120,22 +2144,25 @@ function startVoiceTurn(speakerLang) {
 
 let lastRequestedText = '';
 let lastRequestedTimestamp = 0;
+let isAbortingVoiceTurn = false; // 한 세션에서 다중 번역 방지용 강력한 락
 
 function stopVoiceTurn(doTranslate = false) {
+  if (isAbortingVoiceTurn) return; // 이미 번역을 위해 중단 중이면 무시
+  isAbortingVoiceTurn = true;
+
   if (voiceSilenceTimer) {
     clearTimeout(voiceSilenceTimer);
     voiceSilenceTimer = null;
   }
   const textToTranslate = voiceTurnBuffer.trim();
   const currentSpeaker = activeVoiceSpeaker;
-
-  // 🛡️ 버퍼와 스피커 상태 즉시 초기화 (중복 실행 원천 차단)
   voiceTurnBuffer = '';
+
   activeVoiceSpeaker = null;
 
   if (voiceTurnRec) {
     try {
-      // 🛡️ 모든 이벤트 리스너를 완전히 끊어서 잔여 패킷으로 인한 2차 번역 완전 차단!
+      // 모든 이벤트 리스너를 완전히 끊어서 백그라운드 콜백 차단!
       voiceTurnRec.onresult = null;
       voiceTurnRec.onerror = null;
       voiceTurnRec.onend = null;
@@ -2172,15 +2199,16 @@ async function triggerVoiceTranslate(text, fromLang) {
   let cleanText = (text || '').trim();
   
   // 안드로이드 크롬 STT 중복 반복(Stutter) 버그 텍스트 필터링 (정규식 룩비하인드 제외 안전버전)
-  // "안녕하세요 안녕하세요 화장실" -> "안녕하세요 화장실"
+  // "안녕하세요. 안녕하세요. 화장실" -> "안녕하세요. 화장실"
   function removeStutterWords(str) {
     if (!str) return str;
     const words = str.trim().split(/\s+/);
+    const stripPunc = (s) => s.replace(/[.,?!~요다까]/g, '');
     // 가장 긴 패턴부터 검사해서 잘라냄
     for (let len = Math.floor(words.length / 2); len >= 1; len--) {
         const firstHalf = words.slice(0, len).join('');
         const secondHalf = words.slice(len, len * 2).join('');
-        if (firstHalf === secondHalf) {
+        if (stripPunc(firstHalf) === stripPunc(secondHalf)) {
             return words.slice(len).join(' ');
         }
     }
