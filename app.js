@@ -1870,43 +1870,373 @@ function switchTab(tabId) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// 히스토리 저장 안전 헬퍼
+function addHistoryItem(sourceText, targetText, sl, tl) {
+  try {
+    if (!state.history) state.history = [];
+    state.history.unshift({
+      source: sourceText,
+      target: targetText,
+      from: sl,
+      to: tl,
+      time: Date.now()
+    });
+    if (state.history.length > 50) state.history.pop();
+    localStorage.setItem('osaka_trans_history', JSON.stringify(state.history));
+  } catch (e) {
+    console.warn('Save history error:', e);
+  }
+}
+
+// ==========================================
+// 4. 원터치 실시간 음성 통역 엔진 (OsakaGo Voice Direct)
+// ==========================================
+let simpleVoiceRec = null;
+let isSimpleVoiceActive = false;
+let simpleVoiceBuffer = '';
+let simpleSilenceTimer = null;
+let isTranslatingVoice = false;
+let lastTranslatedJapanese = '';
+let lastOriginalKorean = '';
+let lastPronunciationText = '';
+
+function toggleSimpleVoice() {
+  if (isSimpleVoiceActive) {
+    stopSimpleVoice(true);
+  } else {
+    startSimpleVoice();
+  }
+}
+
+function startSimpleVoice() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    showToast('⚠️ 현재 브라우저에서는 음성 인식을 지원하지 않습니다. Chrome 앱으로 접속해 주세요.');
+    return;
+  }
+
+  // 모바일 오디오 재생 락 즉시 사전 해제 (Autoplay Policy 필수 하네스)
+  unlockAudio();
+
+  // 이전 세션 정리
+  if (simpleVoiceRec) {
+    try { simpleVoiceRec.abort(); } catch(e) {}
+    simpleVoiceRec = null;
+  }
+  if (simpleSilenceTimer) {
+    clearTimeout(simpleSilenceTimer);
+    simpleSilenceTimer = null;
+  }
+
+  simpleVoiceBuffer = '';
+  isSimpleVoiceActive = true;
+  isTranslatingVoice = false;
+
+  // UI 상태: 녹음 중
+  const mainBtn = document.getElementById('voice-main-btn');
+  const micIcon = document.getElementById('voice-mic-icon');
+  const btnLabel = document.getElementById('voice-btn-label');
+  const btnStatus = document.getElementById('voice-btn-status');
+  const streamBox = document.getElementById('voice-stream-box');
+  const streamText = document.getElementById('voice-stream-text');
+
+  if (mainBtn) mainBtn.classList.add('active');
+  if (micIcon) micIcon.innerText = '⏹️';
+  if (btnLabel) btnLabel.innerText = '듣고 있습니다... 말씀하세요!';
+  if (btnStatus) btnStatus.innerText = '말씀이 끝나면 자동 번역됩니다 (터치하면 즉시 번역)';
+  if (streamBox) streamBox.style.display = 'block';
+  if (streamText) streamText.innerText = '🎙️ 한국어로 편하게 말씀하세요...';
+
+  try {
+    const rec = new SpeechRecognition();
+    simpleVoiceRec = rec;
+    rec.lang = 'ko-KR';
+    rec.continuous = false;
+    rec.interimResults = true; // 레이스 컨디션 차단 및 실시간 피드백
+
+    rec.onstart = () => {
+      isSimpleVoiceActive = true;
+    };
+
+    rec.onresult = (event) => {
+      let interim = '';
+      let finalTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interim += event.results[i][0].transcript;
+        }
+      }
+
+      const currentSpoken = (finalTranscript || interim).trim();
+      if (currentSpoken) {
+        simpleVoiceBuffer = currentSpoken;
+        if (streamText) streamText.innerText = `🗣️ "${currentSpoken}"`;
+
+        // 묵음 감지 타이머 (850ms 동안 말이 멈추면 자동 번역 & 음성 출력)
+        if (simpleSilenceTimer) clearTimeout(simpleSilenceTimer);
+        simpleSilenceTimer = setTimeout(() => {
+          stopSimpleVoice(true);
+        }, 850);
+      }
+    };
+
+    rec.onerror = (err) => {
+      console.warn('Voice STT Error:', err);
+      if (err.error === 'not-allowed') {
+        showToast('⚠️ 마이크 권한이 차단되었습니다. 주소창 설정에서 마이크를 허용해 주세요.');
+      }
+      resetSimpleVoiceUI();
+    };
+
+    rec.onend = () => {
+      if (isSimpleVoiceActive) {
+        if (simpleVoiceBuffer && !isTranslatingVoice) {
+          stopSimpleVoice(true);
+        } else {
+          resetSimpleVoiceUI();
+        }
+      }
+    };
+
+    rec.start();
+  } catch (err) {
+    console.error('STT Start Error:', err);
+    resetSimpleVoiceUI();
+    showToast('마이크를 시작할 수 없습니다.');
+  }
+}
+
+function stopSimpleVoice(doTranslate = false) {
+  if (simpleSilenceTimer) {
+    clearTimeout(simpleSilenceTimer);
+    simpleSilenceTimer = null;
+  }
+  const textToTranslate = simpleVoiceBuffer.trim();
+  isSimpleVoiceActive = false;
+
+  if (simpleVoiceRec) {
+    try { simpleVoiceRec.stop(); } catch(e) {}
+    simpleVoiceRec = null;
+  }
+
+  resetSimpleVoiceUI();
+
+  if (doTranslate && textToTranslate) {
+    triggerSimpleVoiceTranslate(textToTranslate);
+  }
+}
+
+function resetSimpleVoiceUI() {
+  isSimpleVoiceActive = false;
+  const mainBtn = document.getElementById('voice-main-btn');
+  const micIcon = document.getElementById('voice-mic-icon');
+  const btnLabel = document.getElementById('voice-btn-label');
+  const btnStatus = document.getElementById('voice-btn-status');
+
+  if (mainBtn) mainBtn.classList.remove('active');
+  if (micIcon) micIcon.innerText = '🎙️';
+  if (btnLabel) btnLabel.innerText = '한국어로 말하기';
+  if (btnStatus) btnStatus.innerText = '터치하고 편하게 말씀하세요 (손 떼고 말하기)';
+}
+
+async function triggerSimpleVoiceTranslate(text) {
+  if (!text || !text.trim() || isTranslatingVoice) return;
+  isTranslatingVoice = true;
+
+  const streamBox = document.getElementById('voice-stream-box');
+  const streamText = document.getElementById('voice-stream-text');
+  const resultBox = document.getElementById('voice-result-box');
+  const resOriginal = document.getElementById('voice-res-original');
+  const resJapanese = document.getElementById('voice-res-japanese');
+  const resReading = document.getElementById('voice-res-reading');
+
+  if (streamBox) streamBox.style.display = 'block';
+  if (streamText) streamText.innerText = `⏳ 번역 중입니다: "${text}"`;
+
+  showToast('⏳ 일본어로 번역 중입니다...');
+
+  let translated = '';
+  let rawRomaji = '';
+
+  // 1차: Google Translate API (신속 & 정확)
+  try {
+    const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=ja&dt=t&dt=rm&q=${encodeURIComponent(text)}`;
+    const resp = await fetch(gUrl);
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data && data[0]) {
+        translated = data[0].filter(it => it[0]).map(it => it[0]).join('');
+        for (let k = 0; k < data[0].length; k++) {
+          const seg = data[0][k];
+          if (seg && seg.length > 2 && typeof seg[2] === 'string' && seg[2].trim()) {
+            rawRomaji = seg[2];
+          } else if (seg && seg.length > 3 && typeof seg[3] === 'string' && seg[3].trim()) {
+            rawRomaji = seg[3];
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Google Translate API error:', err);
+  }
+
+  // 2차 백업: MyMemory
+  if (!translated) {
+    try {
+      const mUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=ko|ja`;
+      const mResp = await fetch(mUrl);
+      if (mResp.ok) {
+        const mData = await mResp.json();
+        if (mData && mData.responseData) {
+          translated = mData.responseData.translatedText;
+        }
+      }
+    } catch (mErr) {
+      console.warn('MyMemory API error:', mErr);
+    }
+  }
+
+  if (streamBox) streamBox.style.display = 'none';
+  isTranslatingVoice = false;
+
+  if (!translated) {
+    showToast('⚠️ 번역 서버 연결 실패. 다시 말씀해 주세요.');
+    return;
+  }
+
+  // 일본어 한글 발음 생성
+  const pron = convertToKoreanPronunciation(translated, rawRomaji);
+
+  lastOriginalKorean = text;
+  lastTranslatedJapanese = translated;
+  lastPronunciationText = pron;
+
+  // 화면 표시 업데이트
+  if (resOriginal) resOriginal.innerText = `🇰🇷 "${text}"`;
+  if (resJapanese) resJapanese.innerText = translated;
+  if (resReading) {
+    if (pron) {
+      resReading.innerText = `🗣️ [발음] ${pron}`;
+      resReading.style.display = 'inline-block';
+    } else {
+      resReading.style.display = 'none';
+    }
+  }
+  if (resultBox) {
+    resultBox.style.display = 'block';
+    resultBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  // 즉시 일본어 원어민 음성으로 읽어주기!
+  speakText(translated, 'ja');
+
+  // 기록 저장
+  addHistoryItem(text, translated, 'ko', 'ja');
+}
+
+function handlePapagoAppLaunch(e) {
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+  if (isAndroid) {
+    // 안드로이드는 <a> 태그의 intent:// 가 기본 동작하여 설치된 진짜 파파고 앱을 즉시 실행
+    return;
+  }
+
+  if (isIOS) {
+    e.preventDefault();
+    const appStoreUrl = 'https://apps.apple.com/kr/app/id1147874819';
+    const now = Date.now();
+    window.location.href = 'papago://translate?sk=ko&tk=ja';
+    setTimeout(() => {
+      if (Date.now() - now < 2200) {
+        window.location.href = appStoreUrl;
+      }
+    }, 1500);
+    return;
+  }
+
+  // PC 브라우저 환경에서는 파파고 웹사이트 새 창 열기
+  e.preventDefault();
+  window.open('https://papago.naver.com/?sk=ko&tk=ja', '_blank');
+}
+
 function setupEventListeners() {
   // 5개 탭 전환
   document.querySelectorAll('.nav-item').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
 
-  // 네이버 파파고 전용 이벤트 리스너
-  const papagoQuickInput = document.getElementById('papago-quick-input');
-  const papagoSendBtn = document.getElementById('papago-send-btn');
+  // 원터치 음성 통역 버튼 이벤트 리스너 바인딩
+  const voiceMainBtn = document.getElementById('voice-main-btn');
+  if (voiceMainBtn) voiceMainBtn.addEventListener('click', toggleSimpleVoice);
 
-  function sendToPapago() {
-    const text = papagoQuickInput ? papagoQuickInput.value.trim() : '';
-    const url = text 
-      ? `https://papago.naver.com/?sk=ko&tk=ja&st=${encodeURIComponent(text)}`
-      : 'https://papago.naver.com/?sk=ko&tk=ja';
-    window.open(url, '_blank');
-  }
+  const voiceNowBtn = document.getElementById('voice-now-action-btn');
+  if (voiceNowBtn) voiceNowBtn.addEventListener('click', () => stopSimpleVoice(true));
 
-  if (papagoSendBtn) papagoSendBtn.addEventListener('click', sendToPapago);
-  if (papagoQuickInput) {
-    papagoQuickInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        sendToPapago();
+  const voiceRespeakBtn = document.getElementById('voice-respeak-btn');
+  if (voiceRespeakBtn) {
+    voiceRespeakBtn.addEventListener('click', () => {
+      if (lastTranslatedJapanese) {
+        unlockAudio();
+        speakText(lastTranslatedJapanese, 'ja');
+      } else {
+        showToast('먼저 한국어로 말씀해주세요.');
       }
     });
   }
 
-  // 파파고 원클릭 필수 표현 칩
-  document.querySelectorAll('.papago-phrase-chip').forEach(chip => {
+  const voiceBigshowBtn = document.getElementById('voice-bigshow-btn');
+  if (voiceBigshowBtn) {
+    voiceBigshowBtn.addEventListener('click', () => {
+      if (lastTranslatedJapanese) {
+        openShowingModal(lastTranslatedJapanese, lastPronunciationText, lastOriginalKorean);
+      } else {
+        showToast('먼저 한국어로 말씀해주세요.');
+      }
+    });
+  }
+
+  // 직접 글자 입력 번역
+  const voiceManualInput = document.getElementById('voice-manual-input');
+  const voiceManualBtn = document.getElementById('voice-manual-btn');
+  function executeManualTranslate() {
+    const val = voiceManualInput ? voiceManualInput.value.trim() : '';
+    if (val) {
+      unlockAudio();
+      triggerSimpleVoiceTranslate(val);
+      if (voiceManualInput) voiceManualInput.value = '';
+    }
+  }
+  if (voiceManualBtn) voiceManualBtn.addEventListener('click', executeManualTranslate);
+  if (voiceManualInput) {
+    voiceManualInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        executeManualTranslate();
+      }
+    });
+  }
+
+  // ⚡ 원클릭 현지 필수 표현 칩 (터치 즉시 일본어 번역 & 음성 재생)
+  document.querySelectorAll('.voice-instant-chip').forEach(chip => {
     chip.addEventListener('click', () => {
-      const phrase = chip.dataset.phrase;
-      if (papagoQuickInput) papagoQuickInput.value = phrase;
-      const url = `https://papago.naver.com/?sk=ko&tk=ja&st=${encodeURIComponent(phrase)}`;
-      window.open(url, '_blank');
+      const phrase = chip.dataset.text;
+      if (phrase) {
+        unlockAudio();
+        triggerSimpleVoiceTranslate(phrase);
+      }
     });
   });
+
+  // 🦜 파파고 공식 앱 열기 버튼 이벤트 리스너
+  const papagoDirectBtn = document.getElementById('papago-direct-app-btn');
+  if (papagoDirectBtn) {
+    papagoDirectBtn.addEventListener('click', handlePapagoAppLaunch);
+  }
 
   // 지도 & 길찾기 관련
   const mapMicBtn = document.getElementById('map-mic-btn');

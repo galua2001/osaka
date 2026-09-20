@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   
   <!-- 앱 스타일시트 -->
-  <link rel="stylesheet" href="style.css?v=4.0">
+  <link rel="stylesheet" href="style.css?v=4.2">
   <link rel="icon" href="icon-192.png">
 </head>
 <body>
@@ -65,77 +65,85 @@
     <!-- 2. 메인 콘텐츠 영역 -->
     <main class="content-wrapper">
 
-      <!-- ================= TAB 1: 네이버 파파고(Papago) 공식 통역 ================= -->
+      <!-- ================= TAB 1: 실시간 음성 통역 & 파파고 앱 ================= -->
       <section id="pane-translate" class="tab-pane active">
 
-        <!-- 🦜 파파고 원클릭 실행 메인 히어로 카드 -->
-        <div class="papago-hero-card">
-          <div class="papago-hero-badge">
-            <span>🦜</span>
-            <span>네이버 공식 통역 엔진</span>
+        <!-- 🎙️ 1. 웹앱 내 원터치 음성 말하기 카드 -->
+        <div class="voice-direct-card">
+          <div class="voice-card-header">
+            <span class="voice-badge">🎙️ 원터치 음성 통역</span>
+            <span class="voice-subinfo">내가 한국어로 말하면 ➔ 일본어로 소리 재생!</span>
           </div>
-          <h2 class="papago-hero-title">네이버 파파고 (Papago)</h2>
-          <p class="papago-hero-desc">오사카 여행 실시간 한국어 ⇄ 일본어 음성 & 텍스트 통역</p>
 
-          <!-- 1초 바로 실행 메인 큰 버튼 -->
-          <a href="https://papago.naver.com/?sk=ko&tk=ja" target="_blank" rel="noopener noreferrer" class="papago-main-launch-btn" id="papago-hero-btn">
-            <span class="launch-icon">🦜</span>
-            <div class="launch-text-col">
-              <span class="launch-title">네이버 파파고 바로 열기 ➔</span>
-              <span class="launch-sub">터치하면 파파고 웹/앱이 즉시 실행됩니다</span>
+          <!-- 큰 마이크 말하기 버튼 -->
+          <button class="voice-main-btn" id="voice-main-btn" title="터치하고 말씀하시면 즉시 일본어로 번역 및 낭독됩니다">
+            <div class="voice-mic-circle">
+              <span id="voice-mic-icon">🎙️</span>
             </div>
-            <span class="launch-arrow">⚡</span>
+            <div class="voice-btn-texts">
+              <span class="voice-btn-label" id="voice-btn-label">한국어로 말하기</span>
+              <span class="voice-btn-status" id="voice-btn-status">터치하고 편하게 말씀하세요 (손 떼고 말하기)</span>
+            </div>
+          </button>
+
+          <!-- 실시간 음성 청취 모니터 -->
+          <div class="voice-stream-box" id="voice-stream-box" style="display: none;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <span id="voice-stream-text" style="font-size: 13px; font-weight: 700; color: #2563EB;">듣고 있습니다... 말씀하세요!</span>
+              <button class="voice-now-action-btn" id="voice-now-action-btn">⚡ 지금 번역</button>
+            </div>
+          </div>
+
+          <!-- 직접 글자 입력 번역 (조용한 곳이나 타이핑 시) -->
+          <div class="voice-manual-row">
+            <input type="text" id="voice-manual-input" placeholder="직접 글자를 입력해 번역할 수도 있어요" class="voice-manual-input">
+            <button id="voice-manual-btn" class="voice-manual-btn">번역</button>
+          </div>
+
+          <!-- 번역 결과 상자 (기본 숨김, 말하면 즉시 표시) -->
+          <div class="voice-result-box" id="voice-result-box" style="display: none;">
+            <div class="voice-result-header">
+              <span class="result-badge">🇯🇵 일본어 번역 & 낭독</span>
+              <div style="display: flex; gap: 6px;">
+                <button class="voice-sub-btn" id="voice-respeak-btn">🔊 다시 듣기</button>
+                <button class="voice-sub-btn" id="voice-bigshow-btn">📱 크게 보기</button>
+              </div>
+            </div>
+            <div class="voice-res-original" id="voice-res-original"></div>
+            <div class="voice-res-japanese" id="voice-res-japanese"></div>
+            <div class="voice-res-reading" id="voice-res-reading"></div>
+          </div>
+
+          <!-- ⚡ 원클릭 현지 필수 표현 (터치 즉시 일본어로 낭독) -->
+          <div class="voice-instant-section">
+            <span class="voice-instant-title">⚡ 원클릭 필수 표현 (터치 즉시 일본어 소리 재생):</span>
+            <div class="voice-instant-grid">
+              <button class="voice-instant-chip" data-text="이거 얼마예요?">💰 얼마예요?</button>
+              <button class="voice-instant-chip" data-text="와사비 빼주세요">🍣 와사비 빼주세요</button>
+              <button class="voice-instant-chip" data-text="이거 하나 주세요">👉 이거 하나 주세요</button>
+              <button class="voice-instant-chip" data-text="계산해 주세요">🧾 계산해 주세요</button>
+              <button class="voice-instant-chip" data-text="화장실 어디예요?">🚻 화장실 어디예요?</button>
+              <button class="voice-instant-chip" data-text="카드 결제 되나요?">💳 카드 되나요?</button>
+              <button class="voice-instant-chip" data-text="생맥주 한 잔 주세요">🍺 생맥주 한 잔</button>
+              <button class="voice-instant-chip" data-text="감사합니다">🙏 감사합니다</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 🦜 2. 네이버 파파고(Papago) 공식 어플(앱) 음성 대화 바로 열기 -->
+        <div class="papago-app-launch-card">
+          <div class="papago-app-header">
+            <span class="papago-app-badge">🦜 네이버 파파고 공식 어플(앱)</span>
+            <span class="papago-app-tag">음성 마이크 지원</span>
+          </div>
+          <p class="papago-app-notice">
+            ※ 웹사이트(인터넷 창)는 네이버에서 마이크 버튼을 제공하지 않습니다.<br>
+            파파고의 <strong>마이크 음성 대화</strong>를 쓰시려면 아래 버튼을 눌러 <strong>[진짜 파파고 공식 앱]</strong>으로 열어주세요! (가운데 마이크 즉시 사용 가능)
+          </p>
+          <a href="intent://translate?sk=ko&tk=ja#Intent;package=com.naver.labs.translator;scheme=papago;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dcom.naver.labs.translator;end" class="papago-direct-app-btn" id="papago-direct-app-btn">
+            <span style="font-size: 20px;">🤖</span>
+            <span>진짜 파파고 공식 앱 열기 (음성 마이크 지원) ➔</span>
           </a>
-        </div>
-
-        <!-- 📝 문장 입력 후 파파고로 바로 번역하기 카드 -->
-        <div class="papago-input-card">
-          <div class="papago-card-title-row">
-            <span class="papago-card-title">✏️ 문장 적어서 파파고로 번역하기</span>
-            <span class="papago-sub-tip">입력 후 [보내기] 터치</span>
-          </div>
-          <div class="papago-input-wrapper">
-            <input 
-              type="text" 
-              id="papago-quick-input" 
-              class="papago-quick-input" 
-              placeholder="예: 와사비 빼주세요, 얼마예요?"
-            />
-            <button class="papago-send-btn" id="papago-send-btn" title="파파고로 보내기">
-              <span>보내기 ➔</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- ⚡ 오사카 현지 원클릭 필수 표현 (터치 즉시 파파고로 연결) -->
-        <div class="papago-quick-section">
-          <div class="papago-quick-title">
-            <span>⚡</span>
-            <span>원클릭 현지 필수 표현 (터치 시 파파고로 바로 번역):</span>
-          </div>
-          <div class="papago-chip-grid">
-            <button class="papago-phrase-chip" data-phrase="이거 얼마예요?">💰 얼마예요?</button>
-            <button class="papago-phrase-chip" data-phrase="와사비 빼주세요">🍣 와사비 빼주세요</button>
-            <button class="papago-phrase-chip" data-phrase="이거 하나 주세요">👉 이거 하나 주세요</button>
-            <button class="papago-phrase-chip" data-phrase="계산해 주세요">🧾 계산해 주세요</button>
-            <button class="papago-phrase-chip" data-phrase="화장실 어디예요?">🚻 화장실 어디예요?</button>
-            <button class="papago-phrase-chip" data-phrase="카드 결제 되나요?">💳 카드 되나요?</button>
-            <button class="papago-phrase-chip" data-phrase="생맥주 한 잔 주세요">🍺 생맥주 한 잔</button>
-            <button class="papago-phrase-chip" data-phrase="감사합니다">🙏 감사합니다</button>
-          </div>
-        </div>
-
-        <!-- 💡 여행 팁 안내 카드 -->
-        <div class="papago-tip-card">
-          <div class="tip-card-header">
-            <span>💡</span>
-            <strong>오사카 여행 통역 안내</strong>
-          </div>
-          <ul class="papago-tip-list">
-            <li>스마트폰에 <strong>네이버 파파고 앱</strong>이 있으면 앱으로 바로 열려 음성 통역을 편하게 쓰실 수 있습니다.</li>
-            <li>앱이 없어도 크롬 브라우저에서 <strong>네이버 공식 웹페이지</strong>로 완벽하게 통역됩니다.</li>
-            <li>길찾기나 맛집 정보는 하단의 <strong>[🗺️ 길찾기·지도]</strong>와 <strong>[🍽️ 맛집추천]</strong> 메뉴를 누르시면 언제든 보실 수 있습니다!</li>
-          </ul>
         </div>
 
       </section>
@@ -461,7 +469,7 @@
   <!-- Leaflet 지도 JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <!-- 메인 앱 스크립트 연결 -->
-  <script src="app.js?v=4.0"></script>
+  <script src="app.js?v=4.2"></script>
 
   <!-- PWA 서비스 워커 및 앱 설치 제어 -->
   <script>
