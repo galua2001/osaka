@@ -29,7 +29,9 @@ const state = {
   activeDialogSpeaker: null,
   isRealtimeVoiceActive: false,
   realtimeRecognition: null,
-  isSpeakingNow: false
+  isSpeakingNow: false,
+  dualTurnSpeaker: null,
+  isProcessingDualResult: false
 };
 
 // ==========================================
@@ -460,19 +462,35 @@ function initVoices() {
 }
 
 // ==========================================
+// 모바일 브라우저 오디오 언락
+function unlockAudio() {
+  if ('speechSynthesis' in window) {
+    try {
+      const u = new SpeechSynthesisUtterance(' ');
+      u.volume = 0.01;
+      window.speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+}
+
+// ==========================================
 // 4-1. 양방향 실시간 티키타카 대화 통역 엔진
 // ==========================================
 function startDualTurn(speakerLang) {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
-    showToast('이 기기는 음성 인식을 지원하지 않습니다.');
+    showToast('⚠️ 이 기기/브라우저는 음성 인식을 지원하지 않습니다. Chrome을 이용해 주세요.');
     return;
   }
 
-  // 이전 마이크 인스턴스 중단
+  // 모바일 오디오 재생 락 해제
+  unlockAudio();
+
+  // 이전 마이크 인스턴스 안전하게 종료
   stopDualTurn(false);
 
   state.dualTurnSpeaker = speakerLang;
+  state.isProcessingDualResult = false;
 
   const koBtn = document.getElementById('dual-speak-ko-btn');
   const jaBtn = document.getElementById('dual-listen-ja-btn');
@@ -489,10 +507,10 @@ function startDualTurn(speakerLang) {
 
     if (koBtn) koBtn.classList.add('active');
     if (jaBtn) jaBtn.classList.remove('active');
-    if (koStatus) koStatus.innerText = '🔴 듣는 중 (손 떼고 말씀하세요)';
+    if (koStatus) koStatus.innerText = '🔴 듣는 중 (말씀하세요)';
     if (jaStatus) jaStatus.innerText = '대기 중';
     if (banner) banner.style.display = 'flex';
-    if (bannerText) bannerText.innerText = '🔴 한국어로 말씀하세요... (말끝나면 일본어 소리로 읽어줍니다)';
+    if (bannerText) bannerText.innerText = '🔴 한국어로 말씀하세요... (말씀이 끝나면 일본어로 읽어줍니다)';
     showToast('🎙️ [내가 말하기] 한국어로 말씀하시면 일본어로 읽어줍니다.');
   } else {
     // [상대방 차례] 일본어 ➔ 한국어 번역
@@ -511,44 +529,68 @@ function startDualTurn(speakerLang) {
 
   state.realtimeRecognition = new SpeechRecognition();
   state.realtimeRecognition.continuous = false;
-  state.realtimeRecognition.interimResults = false;
+  state.realtimeRecognition.interimResults = true; // 말하는 동안 실시간 텍스트 피드백
   state.realtimeRecognition.lang = speakerLang === 'ko' ? 'ko-KR' : 'ja-JP';
 
   state.realtimeRecognition.onresult = async (event) => {
-    const transcript = event.results[0][0].transcript.trim();
-    if (transcript) {
-      const inputEl = document.getElementById('source-text');
-      if (inputEl) inputEl.value = transcript;
+    let interimTranscript = '';
+    let finalTranscript = '';
 
-      // 실시간 번역 실행
+    for (let i = event.resultIndex; i < event.results.length; ++i) {
+      if (event.results[i].isFinal) {
+        finalTranscript += event.results[i][0].transcript;
+      } else {
+        interimTranscript += event.results[i][0].transcript;
+      }
+    }
+
+    const inputEl = document.getElementById('source-text');
+    if (inputEl && interimTranscript) {
+      inputEl.value = interimTranscript;
+    }
+
+    const textToTranslate = (finalTranscript || interimTranscript).trim();
+    if (finalTranscript && textToTranslate) {
+      // 결과 처리 시작: onend의 재시작 루프 차단!
+      state.isProcessingDualResult = true;
+
+      if (inputEl) inputEl.value = textToTranslate;
+
+      try {
+        state.realtimeRecognition.stop();
+      } catch (e) {}
+
+      showToast('⏳ 번역 중입니다...');
       await performTranslation(false);
 
-      const targetText = document.getElementById('target-text').innerText;
+      const targetTextEl = document.getElementById('target-text');
+      const targetText = targetTextEl ? targetTextEl.innerText.trim() : '';
       const targetLang = state.targetLang;
 
-      if (targetText && targetText !== '번역 결과가 여기에 표시됩니다.') {
-        // 번역된 소리 스피커로 출력
+      if (targetText && targetText !== '번역 결과가 여기에 표시됩니다.' && !targetText.includes('오류가 발생했습니다')) {
         speakText(targetText, targetLang, () => {
+          state.isProcessingDualResult = false;
           // 자동 티키타카(핑퐁) 대화 모드 확인
           const autoPingpong = document.getElementById('auto-pingpong-check');
           if (autoPingpong && autoPingpong.checked && state.dualTurnSpeaker) {
-            // 내가 말했으면(ko) ➔ 상대방 일본어 답변(ja)으로 자동 전환!
-            // 상대방이 말했으면(ja) ➔ 다시 내가 말하기(ko)로 자동 복귀!
             const nextSpeaker = speakerLang === 'ko' ? 'ja' : 'ko';
             setTimeout(() => {
-              if (state.dualTurnSpeaker) {
+              if (state.dualTurnSpeaker && !state.isSpeakingNow) {
                 startDualTurn(nextSpeaker);
               }
-            }, 600);
+            }, 500);
           } else if (state.dualTurnSpeaker) {
             setTimeout(() => {
-              if (state.dualTurnSpeaker) startDualTurn(speakerLang);
+              if (state.dualTurnSpeaker && !state.isSpeakingNow) startDualTurn(speakerLang);
             }, 400);
           }
         });
       } else {
+        state.isProcessingDualResult = false;
         if (state.dualTurnSpeaker) {
-          setTimeout(() => startDualTurn(speakerLang), 500);
+          setTimeout(() => {
+            if (state.dualTurnSpeaker && !state.isSpeakingNow) startDualTurn(speakerLang);
+          }, 600);
         }
       }
     }
@@ -556,30 +598,50 @@ function startDualTurn(speakerLang) {
 
   state.realtimeRecognition.onerror = (err) => {
     console.warn('Dual STT Error:', err);
-    if (state.dualTurnSpeaker && !state.isSpeakingNow) {
+    if (err.error === 'not-allowed' || err.error === 'service-not-allowed') {
+      showToast('⚠️ 마이크 사용 권한을 허용해 주세요!');
+      stopDualTurn(false);
+      return;
+    }
+    if (err.error === 'no-speech') {
+      // 아무 말도 하지 않았을 때
+      return;
+    }
+    if (state.isProcessingDualResult || state.isSpeakingNow) return;
+    if (state.dualTurnSpeaker) {
       setTimeout(() => {
-        if (state.dualTurnSpeaker) startDualTurn(speakerLang);
+        if (state.dualTurnSpeaker && !state.isProcessingDualResult && !state.isSpeakingNow) {
+          startDualTurn(speakerLang);
+        }
       }, 700);
     }
   };
 
   state.realtimeRecognition.onend = () => {
-    if (state.dualTurnSpeaker && !state.isSpeakingNow) {
+    // 이미 번역 또는 TTS 진행 중이면 마이크를 재시작하지 않고 대기
+    if (state.isProcessingDualResult || state.isSpeakingNow) return;
+
+    // 자연스러운 마이크 꺼짐 시 재개
+    if (state.dualTurnSpeaker) {
       setTimeout(() => {
-        if (state.dualTurnSpeaker) startDualTurn(speakerLang);
-      }, 400);
+        if (state.dualTurnSpeaker && !state.isProcessingDualResult && !state.isSpeakingNow) {
+          startDualTurn(speakerLang);
+        }
+      }, 300);
     }
   };
 
   try {
     state.realtimeRecognition.start();
   } catch (e) {
-    console.warn(e);
+    console.warn('SpeechRecognition start error:', e);
   }
 }
 
 function stopDualTurn(showMsg = true) {
   state.dualTurnSpeaker = null;
+  state.isProcessingDualResult = false;
+
   if (state.realtimeRecognition) {
     try { state.realtimeRecognition.stop(); } catch(e) {}
     state.realtimeRecognition = null;
@@ -1424,32 +1486,56 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
     return;
   }
 
+  // 모바일 기기에서 음성 목록 재로드
+  if (!state.voices || state.voices.length === 0) {
+    state.voices = window.speechSynthesis.getVoices();
+  }
+
   window.speechSynthesis.cancel();
 
   const utterance = new SpeechSynthesisUtterance(text);
   const langCode = lang === 'ko' ? 'ko-KR' : 'ja-JP';
   utterance.lang = langCode;
   utterance.rate = 0.92;
+  utterance.volume = 1.0;
 
-  const voice = state.voices.find(v => v.lang === langCode || v.lang.startsWith(lang));
+  const voice = state.voices.find(v => v.lang === langCode || v.lang.replace('_', '-').startsWith(lang));
   if (voice) utterance.voice = voice;
+
+  let callbackFired = false;
+  const finishSpeech = () => {
+    if (!callbackFired) {
+      callbackFired = true;
+      state.isSpeakingNow = false;
+      if (onEndCallback) onEndCallback();
+    }
+  };
+
+  // 모바일 Safari onend 유실 대비 안전 타임아웃
+  const safetyTimeout = setTimeout(finishSpeech, Math.max(3000, text.length * 350));
 
   utterance.onstart = () => {
     state.isSpeakingNow = true;
-    showToast('🔊 음성을 재생합니다...');
+    showToast(lang === 'ja' ? '🔊 [일본어] 음성 안내 중...' : '🔊 [한국어] 음성 안내 중...');
   };
 
   utterance.onend = () => {
-    state.isSpeakingNow = false;
-    if (onEndCallback) onEndCallback();
+    clearTimeout(safetyTimeout);
+    finishSpeech();
   };
 
-  utterance.onerror = () => {
-    state.isSpeakingNow = false;
-    if (onEndCallback) onEndCallback();
+  utterance.onerror = (e) => {
+    console.warn('TTS error:', e);
+    clearTimeout(safetyTimeout);
+    finishSpeech();
   };
 
-  window.speechSynthesis.speak(utterance);
+  try {
+    window.speechSynthesis.speak(utterance);
+  } catch (e) {
+    console.warn('SpeechSynthesis speak error:', e);
+    finishSpeech();
+  }
 }
 
 function copyToClipboard(text) {
@@ -1667,6 +1753,7 @@ function setupEventListeners() {
   const dualKoBtn = document.getElementById('dual-speak-ko-btn');
   if (dualKoBtn) {
     dualKoBtn.addEventListener('click', () => {
+      unlockAudio();
       if (state.dualTurnSpeaker === 'ko') {
         stopDualTurn(true);
       } else {
@@ -1678,6 +1765,7 @@ function setupEventListeners() {
   const dualJaBtn = document.getElementById('dual-listen-ja-btn');
   if (dualJaBtn) {
     dualJaBtn.addEventListener('click', () => {
+      unlockAudio();
       if (state.dualTurnSpeaker === 'ja') {
         stopDualTurn(true);
       } else {
