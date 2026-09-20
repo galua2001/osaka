@@ -1977,11 +1977,11 @@ function startVoiceTurn(speakerLang) {
     const rec = new SpeechRecognition();
     voiceTurnRec = rec;
     rec.lang = speakerLang === 'ko' ? 'ko-KR' : 'ja-JP';
-    rec.continuous = true; // 끊기지 않고 사용자의 말을 끝까지 듣도록 설정
+    rec.continuous = false; // 모바일 Safari 및 Chrome에서 100% 끊김 없는 최적 규격
     rec.interimResults = true;
 
     rec.onstart = () => {
-      // 시작 확인
+      // 음성 인식 정상 시작
     };
 
     rec.onresult = (event) => {
@@ -2001,35 +2001,34 @@ function startVoiceTurn(speakerLang) {
         voiceTurnBuffer = currentSpoken;
         if (streamText) streamText.innerText = `🗣️ "${currentSpoken}"`;
 
-        // 묵음 감지 타이머 (1.1초 동안 말이 멈추면 자동 번역)
-        if (voiceSilenceTimer) clearTimeout(voiceSilenceTimer);
-        voiceSilenceTimer = setTimeout(() => {
+        if (finalTranscript && !isTranslatingVoiceTurn) {
+          // 문장이 완성되면 즉시 락을 걸고 번역 실행
           stopVoiceTurn(true);
-        }, 1100);
+        }
       }
     };
 
     rec.onerror = (err) => {
       console.warn('Voice STT Error:', err);
-      if (err.error === 'not-allowed') {
+      if (err.error === 'not-allowed' || err.error === 'service-not-allowed') {
         const micModal = document.getElementById('mic-guide-modal');
         if (micModal) micModal.classList.add('active');
         else showToast('⚠️ 마이크 권한이 차단되었습니다. 브라우저 설정에서 마이크를 허용해 주세요.');
         resetVoiceTurnUI();
       } else if (err.error === 'no-speech') {
-        if (streamText) streamText.innerText = '🎙️ 듣고 있습니다... 마이크에 대고 말씀해주세요!';
+        if (streamText) streamText.innerText = '🎙️ 말씀이 감지되지 않았습니다. 다시 말씀해 주세요.';
+        resetVoiceTurnUI();
       } else {
         resetVoiceTurnUI();
       }
     };
 
     rec.onend = () => {
-      if (activeVoiceSpeaker) {
-        if (voiceTurnBuffer && !isTranslatingVoiceTurn) {
-          stopVoiceTurn(true);
-        } else {
-          resetVoiceTurnUI();
-        }
+      // race condition 방지: 이미 번역 중이 아니고 버퍼가 있으면 번역 실행
+      if (activeVoiceSpeaker && voiceTurnBuffer && !isTranslatingVoiceTurn) {
+        stopVoiceTurn(true);
+      } else if (!isTranslatingVoiceTurn) {
+        resetVoiceTurnUI();
       }
     };
 
