@@ -1,5 +1,6 @@
 {
-  "name": "OsakaGo - 오사카 여행 실시간 통역기",
+  "id": "/osaka/",
+  "name": "OsakaGo - 오사카 여행 통역기",
   "short_name": "OsakaGo",
   "description": "오사카 자유여행 실시간 양방향 티키타카 음성 통역 & 길찾기 지도 & 맛집 가이드",
   "start_url": "./index.html",
@@ -13,13 +14,25 @@
       "src": "icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
