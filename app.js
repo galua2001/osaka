@@ -1650,23 +1650,25 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
         finishSpeech();
       };
 
-      utterance.onerror = () => {
+      utterance.onerror = (e) => {
+        alert('내장 음성 엔진 오류 발생: ' + (e.error || '알 수 없음'));
         clearTimeout(safetyTimeout);
         // 내장 음성 실패 시 구글 TTS 오디오 백업 시도
         playGoogleTtsBackup();
       };
 
-      // 🛡️ cancel() 후 60ms 딜레이: Chrome 이중 발화 큐 버그 방지 (이전에 잘 되던 방식!)
+      // 🛡️ cancel() 후 60ms 딜레이: Chrome 이중 발화 큐 버그 방지
       setTimeout(() => {
         try {
           window.speechSynthesis.speak(utterance);
         } catch(e) {
+          alert('내장 음성 엔진 실행 예외: ' + e.message);
           playGoogleTtsBackup();
         }
       }, 60);
       return;
     } catch(e) {
-      console.warn('SpeechSynthesis exception:', e);
+      alert('내장 음성 엔진 초기화 예외: ' + e.message);
     }
   }
 
@@ -1678,28 +1680,32 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
     try {
       const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(text)}`;
       
-      // 🛡️ 모바일 Autoplay 정책 우회를 위해 사용자 터치로 언락된 전역 오디오 객체 사용!
       let audio = globalTtsAudio;
       if (!audio) {
         audio = new Audio();
       }
       
       currentTtsAudio = audio;
-      audio.referrerPolicy = 'no-referrer'; // 🚨 이거 없으면 구글에서 404 에러 띄우고 차단함!!
+      audio.referrerPolicy = 'no-referrer'; 
       audio.src = ttsUrl;
 
       audio.onended = () => { clearTimeout(safetyTimeout); finishSpeech(); };
-      audio.onerror = () => { clearTimeout(safetyTimeout); finishSpeech(); };
+      audio.onerror = () => { 
+        alert(`구글 오디오 다운로드 실패! (에러코드: ${audio.error ? audio.error.code : '알수없음'})`);
+        clearTimeout(safetyTimeout); 
+        finishSpeech(); 
+      };
 
       const p = audio.play();
       if (p !== undefined) {
         p.catch((e) => { 
-          console.warn('Google TTS Backup blocked by browser:', e);
+          alert('모바일 브라우저 오디오 자동재생 차단됨! 다시 듣기 버튼을 직접 눌러보세요.');
           clearTimeout(safetyTimeout); 
           finishSpeech(); 
         });
       }
     } catch(e) {
+      alert('오디오 백업 실행 예외: ' + e.message);
       clearTimeout(safetyTimeout);
       finishSpeech();
     }
