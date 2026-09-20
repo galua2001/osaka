@@ -476,15 +476,16 @@ let audioUnlocker = null;
 function unlockAudio() {
   if ('speechSynthesis' in window) {
     try {
-      // 🚨 절대 안드로이드에서 cancel()이나 말 없는 큐를 주입하지 마세요. (Deadlock 유발)
-      // 안드로이드는 한 번 꼬이면 브라우저 재시작 전까지 영구 먹통됩니다.
+      // 안드로이드 '첫 발화 삼킴 버그'를 소모시키기 위한 무음 더미 발화
+      const u = new SpeechSynthesisUtterance(' ');
+      u.volume = 0;
+      window.speechSynthesis.speak(u);
     } catch (e) {}
   }
   try {
     const player = document.getElementById('global-tts-player');
     if (player) {
       player.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
-      // 🚨 절대 pause() 하지 마세요! 끝까지 재생되어야 브라우저가 확실하게 '사용자가 허락한 오디오'로 인증해 줍니다.
       player.play().catch(() => {});
     }
   } catch (e) {}
@@ -1607,34 +1608,32 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
   state.isSpeakingNow = true;
   showToast(lang === 'ja' ? '🔊 [일본어] 음성 낭독 중...' : '🔊 [한국어] 음성 낭독 중...');
 
-  try {
-    // 🚨 안드로이드 내장 SpeechSynthesis는 첫 발화 삼킴 + cancel() 시 영구 데드락 버그로 인해 전면 폐기
-    // 🚨 Google TTS IP 밴(429) 회피를 위해 무조건 client=gtx 사용
-    const ttsUrl = `https://translate.googleapis.com/translate_tts?ie=UTF-8&client=gtx&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(text)}`;
-    const player = document.getElementById('global-tts-player');
-    
-    if (player) {
-      player.pause();
-      player.currentTime = 0;
-      player.referrerPolicy = 'no-referrer'; // 필수
-      player.src = ttsUrl;
+  if ('speechSynthesis' in window) {
+    try {
+      // 🚨 절대 cancel()을 호출하지 마세요. 안드로이드에서 큐가 꼬였을 때 cancel()을 호출하면 영구 데드락(먹통)이 발생합니다.
       
-      player.onended = () => { clearTimeout(safetyTimeout); finishSpeech(); };
-      player.onerror = () => { clearTimeout(safetyTimeout); finishSpeech(); };
-      
-      const p = player.play();
-      if (p !== undefined) {
-        p.catch(() => {
-          clearTimeout(safetyTimeout);
-          finishSpeech();
-        });
+      const utterance = new SpeechSynthesisUtterance(text);
+      const langCode = lang === 'ko' ? 'ko-KR' : 'ja-JP';
+      utterance.lang = langCode;
+      utterance.rate = 0.95;
+      utterance.volume = 1.0;
+
+      // 안드로이드 삼성폰 등에서는 getVoices()에 일본어가 안 보일 수 있지만
+      // utterance.lang만 설정해주면 자체적으로 알아서 읽어줌
+      if (state.voices && state.voices.length > 0) {
+        const voice = state.voices.find(v => v.lang.replace('_', '-').toLowerCase().startsWith(lang.toLowerCase()));
+        if (voice) utterance.voice = voice;
       }
-    } else {
-      clearTimeout(safetyTimeout);
+
+      utterance.onend = () => { clearTimeout(safetyTimeout); finishSpeech(); };
+      utterance.onerror = () => { clearTimeout(safetyTimeout); finishSpeech(); };
+
+      window.speechSynthesis.speak(utterance);
+      return;
+    } catch(e) {
       finishSpeech();
     }
-  } catch(e) {
-    clearTimeout(safetyTimeout);
+  } else {
     finishSpeech();
   }
 }
