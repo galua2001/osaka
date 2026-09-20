@@ -1627,85 +1627,99 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
   state.isSpeakingNow = true;
   showToast(lang === 'ja' ? '🔊 [일본어] 음성 낭독 중...' : '🔊 [한국어] 음성 낭독 중...');
 
-  // 🎯 1차: 기기 내장 SpeechSynthesis (이전에 소리가 나오던 방식 그대로!)
+  const langCode = lang === 'ko' ? 'ko-KR' : 'ja-JP';
+
+  // 1차: 브라우저 내장 음성에 해당 언어 Voice가 확실히 존재하는지 확인
+  let nativeVoice = null;
   if ('speechSynthesis' in window) {
     try {
-      window.speechSynthesis.cancel();
-
       if (!state.voices || state.voices.length === 0) {
         state.voices = window.speechSynthesis.getVoices() || [];
       }
-
-      const utterance = new SpeechSynthesisUtterance(text);
-      const langCode = lang === 'ko' ? 'ko-KR' : 'ja-JP';
-      utterance.lang = langCode;
-      utterance.rate = 0.95;
-      utterance.volume = 1.0;
-
-      const voice = (state.voices || []).find(v => v.lang === langCode || (v.lang && v.lang.replace('_', '-').startsWith(lang)));
-      if (voice) utterance.voice = voice;
-
-      utterance.onend = () => {
-        clearTimeout(safetyTimeout);
-        finishSpeech();
-      };
-
-      utterance.onerror = (e) => {
-        alert('내장 음성 엔진 오류 발생: ' + (e.error || '알 수 없음'));
-        clearTimeout(safetyTimeout);
-        // 내장 음성 실패 시 구글 TTS 오디오 백업 시도
-        playGoogleTtsBackup();
-      };
-
-      // 🛡️ cancel() 후 60ms 딜레이: Chrome 이중 발화 큐 버그 방지
-      setTimeout(() => {
-        try {
-          window.speechSynthesis.speak(utterance);
-        } catch(e) {
-          alert('내장 음성 엔진 실행 예외: ' + e.message);
-          playGoogleTtsBackup();
-        }
-      }, 60);
-      return;
-    } catch(e) {
-      alert('내장 음성 엔진 초기화 예외: ' + e.message);
-    }
+      nativeVoice = (state.voices || []).find(v => 
+        v.lang === langCode || 
+        v.lang.toLowerCase() === langCode.toLowerCase() ||
+        (v.lang && v.lang.replace('_', '-').toLowerCase().startsWith(lang.toLowerCase()))
+      );
+    } catch(e) {}
   }
 
-  // 2차 백업: 구글 TTS 오디오 스트림
-  playGoogleTtsBackup();
+  // 🛡️ [핵심] 일본어 내장 음성이 없는 폰이거나 큐가 꼬였을 때를 대비:
+  // 네이티브 음성이 아예 없으면 볼 것도 없이 즉시 구글 오디오로 직행!
+  if (!nativeVoice) {
+    playGoogleTtsBackup();
+    return;
+  }
+
+  // 내장 음성이 확인된 경우: SpeechSynthesis 실행
+  try {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = langCode;
+    utterance.rate = 0.95;
+    utterance.volume = 1.0;
+    utterance.voice = nativeVoice;
+
+    let hasStarted = false;
+    utterance.onstart = () => {
+      hasStarted = true;
+    };
+
+    utterance.onend = () => {
+      clearTimeout(safetyTimeout);
+      finishSpeech();
+    };
+
+    utterance.onerror = (e) => {
+      clearTimeout(safetyTimeout);
+      playGoogleTtsBackup();
+    };
+
+    // Chrome 버그 방지 60ms 딜레이
+    setTimeout(() => {
+      try {
+        window.speechSynthesis.speak(utterance);
+      } catch(e) {
+        playGoogleTtsBackup();
+      }
+    }, 60);
+
+    // 🚨 [진짜 핵심 와치독] 800ms 동안 onstart가 안 뜬다? = 브라우저 큐가 꼬여서 먹통된 상태!
+    // 즉시 내장 음성 포기하고 구글 오디오로 갈아탐!
+    setTimeout(() => {
+      if (!hasStarted && state.isSpeakingNow && !callbackFired) {
+        try { window.speechSynthesis.cancel(); } catch(e) {}
+        playGoogleTtsBackup();
+      }
+    }, 800);
+
+  } catch(e) {
+    playGoogleTtsBackup();
+  }
 
   function playGoogleTtsBackup() {
     if (callbackFired) return;
     try {
       const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(text)}`;
       
+      // 모바일 Autoplay 정책 우회를 위해 사용자 터치로 언락된 전역 오디오 객체 재사용
       let audio = globalTtsAudio;
-      if (!audio) {
-        audio = new Audio();
-      }
+      if (!audio) audio = new Audio();
       
       currentTtsAudio = audio;
-      audio.referrerPolicy = 'no-referrer'; 
+      audio.referrerPolicy = 'no-referrer'; // 구글 404 에러 방지 필수!
       audio.src = ttsUrl;
 
       audio.onended = () => { clearTimeout(safetyTimeout); finishSpeech(); };
-      audio.onerror = () => { 
-        alert(`구글 오디오 다운로드 실패! (에러코드: ${audio.error ? audio.error.code : '알수없음'})`);
-        clearTimeout(safetyTimeout); 
-        finishSpeech(); 
-      };
+      audio.onerror = () => { clearTimeout(safetyTimeout); finishSpeech(); };
 
       const p = audio.play();
       if (p !== undefined) {
         p.catch((e) => { 
-          alert('모바일 브라우저 오디오 자동재생 차단됨! 다시 듣기 버튼을 직접 눌러보세요.');
           clearTimeout(safetyTimeout); 
           finishSpeech(); 
         });
       }
     } catch(e) {
-      alert('오디오 백업 실행 예외: ' + e.message);
       clearTimeout(safetyTimeout);
       finishSpeech();
     }
