@@ -1609,68 +1609,66 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
   state.isSpeakingNow = true;
   showToast(lang === 'ja' ? '🔊 [일본어] 음성 낭독 중...' : '🔊 [한국어] 음성 낭독 중...');
 
-  // 🎯 [전략 전환] 항상 구글 TTS 오디오 스트림을 1차로 사용!
-  // 모바일에서 SpeechSynthesis보다 100배 안정적이고, 원어민 발음 음질도 우수함.
-  // ❌ crossOrigin 절대 설정하지 말 것! (구글 서버가 CORS 안 보내서 오디오 차단됨)
-  try {
-    const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(text)}`;
-    const audio = new Audio(ttsUrl);
-    currentTtsAudio = audio;
-
-    audio.onended = () => {
-      clearTimeout(safetyTimeout);
-      finishSpeech();
-    };
-
-    audio.onerror = () => {
-      console.warn('Google TTS audio failed, trying SpeechSynthesis fallback...');
-      currentTtsAudio = null;
-      trySpeechSynthesisFallback();
-    };
-
-    const p = audio.play();
-    if (p !== undefined) {
-      p.catch(() => {
-        console.warn('Google TTS autoplay blocked, trying SpeechSynthesis fallback...');
-        currentTtsAudio = null;
-        trySpeechSynthesisFallback();
-      });
-    }
-  } catch(err) {
-    console.warn('Google TTS Audio() failed:', err);
-    trySpeechSynthesisFallback();
-  }
-
-  // 2차 백업: 구글 TTS가 실패한 경우에만 내장 음성 합성 시도
-  function trySpeechSynthesisFallback() {
-    if (callbackFired) return;
-    if (!('speechSynthesis' in window)) {
-      clearTimeout(safetyTimeout);
-      finishSpeech();
-      return;
-    }
-
+  // 🎯 1차: 기기 내장 SpeechSynthesis (이전에 소리가 나오던 방식 그대로!)
+  if ('speechSynthesis' in window) {
     try {
+      window.speechSynthesis.cancel();
+
       if (!state.voices || state.voices.length === 0) {
         state.voices = window.speechSynthesis.getVoices() || [];
       }
 
-      const langCode = lang === 'ko' ? 'ko-KR' : 'ja-JP';
       const utterance = new SpeechSynthesisUtterance(text);
+      const langCode = lang === 'ko' ? 'ko-KR' : 'ja-JP';
       utterance.lang = langCode;
       utterance.rate = 0.95;
       utterance.volume = 1.0;
 
-      const voice = (state.voices || []).find(v =>
-        v.lang === langCode ||
-        (v.lang && v.lang.replace('_', '-').toLowerCase().startsWith(lang.toLowerCase()))
-      );
+      const voice = (state.voices || []).find(v => v.lang === langCode || (v.lang && v.lang.replace('_', '-').startsWith(lang)));
       if (voice) utterance.voice = voice;
 
-      utterance.onend = () => { clearTimeout(safetyTimeout); finishSpeech(); };
-      utterance.onerror = () => { clearTimeout(safetyTimeout); finishSpeech(); };
+      utterance.onend = () => {
+        clearTimeout(safetyTimeout);
+        finishSpeech();
+      };
 
-      window.speechSynthesis.speak(utterance);
+      utterance.onerror = () => {
+        clearTimeout(safetyTimeout);
+        // 내장 음성 실패 시 구글 TTS 오디오 백업 시도
+        playGoogleTtsBackup();
+      };
+
+      // 🛡️ cancel() 후 60ms 딜레이: Chrome 이중 발화 큐 버그 방지 (이전에 잘 되던 방식!)
+      setTimeout(() => {
+        try {
+          window.speechSynthesis.speak(utterance);
+        } catch(e) {
+          playGoogleTtsBackup();
+        }
+      }, 60);
+      return;
+    } catch(e) {
+      console.warn('SpeechSynthesis exception:', e);
+    }
+  }
+
+  // 2차 백업: 구글 TTS 오디오 스트림
+  playGoogleTtsBackup();
+
+  function playGoogleTtsBackup() {
+    if (callbackFired) return;
+    try {
+      const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(text)}`;
+      const audio = new Audio(ttsUrl);
+      currentTtsAudio = audio;
+
+      audio.onended = () => { clearTimeout(safetyTimeout); finishSpeech(); };
+      audio.onerror = () => { clearTimeout(safetyTimeout); finishSpeech(); };
+
+      const p = audio.play();
+      if (p !== undefined) {
+        p.catch(() => { clearTimeout(safetyTimeout); finishSpeech(); });
+      }
     } catch(e) {
       clearTimeout(safetyTimeout);
       finishSpeech();
