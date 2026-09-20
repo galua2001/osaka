@@ -1610,7 +1610,8 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
   // 무조건 100% 확실한 구글 스튜디오 오디오 스트림(HTML5 Audio DOM) 사용
   // SpeechSynthesis는 기기마다 편차가 너무 심하고 큐가 꼬이는 버그가 많아 안드로이드에서 퇴출.
   try {
-    const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(text)}`;
+    // 🚨 Google TTS IP 차단(429/403) 우회를 위해 translate.googleapis.com 및 client=gtx 엔드포인트로 전면 교체!
+    const ttsUrl = `https://translate.googleapis.com/translate_tts?ie=UTF-8&client=gtx&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(text)}`;
     const player = document.getElementById('global-tts-player');
     
     if (player) {
