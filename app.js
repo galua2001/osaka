@@ -471,6 +471,15 @@ function initVoices() {
 // 모바일 브라우저 오디오 언락 (Web Speech API + HTML5 Audio 완벽 해제)
 let audioUnlocker = null;
 function unlockAudio() {
+  // 🛡️ [필수] 모바일 브라우저 SpeechSynthesis 언락: 사용자 터치 시점에 빈 발화를 한 번 실행해야
+  // 이후 비동기로 호출되는 speechSynthesis.speak()가 차단되지 않음!
+  if ('speechSynthesis' in window) {
+    try {
+      const u = new SpeechSynthesisUtterance(' ');
+      u.volume = 0.01;
+      window.speechSynthesis.speak(u);
+    } catch (e) {}
+  }
   try {
     if (!audioUnlocker) {
       audioUnlocker = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
