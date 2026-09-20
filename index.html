@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   
   <!-- 앱 스타일시트 -->
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=3.0">
   <link rel="icon" href="icon-192.png">
 </head>
 <body>
@@ -106,16 +106,21 @@
           <!-- 자동 핑퐁 (티키타카 대화) 모드 토글 -->
           <div class="pingpong-option-row">
             <label class="pingpong-check-label" title="내 말이 끝나면 자동으로 상대방 일본어 답변 대기로 전환됩니다">
-              <input type="checkbox" id="auto-pingpong-check" checked>
+              <input type="checkbox" id="auto-pingpong-check">
               <span>🔄 <strong>자동 티키타카 모드:</strong> 내가 말한 뒤 자동으로 상대방 답변 대기로 전환</span>
             </label>
           </div>
 
           <!-- 실시간 청취 상태 안내 배너 -->
           <div class="dual-live-banner" id="dual-live-banner" style="display: none;">
-            <span class="live-pulse-dot"></span>
-            <span id="dual-live-banner-text">한국어로 말씀하세요... (손 떼고 편하게 말씀하세요)</span>
-            <button class="dual-stop-btn" id="dual-stop-btn">중단</button>
+            <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
+              <span class="live-pulse-dot"></span>
+              <span id="dual-live-banner-text" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">한국어로 말씀하세요...</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+              <button class="dual-now-btn" id="dual-now-btn" title="말씀을 마치셨다면 즉시 번역합니다">⚡ 지금 번역</button>
+              <button class="dual-stop-btn" id="dual-stop-btn">취소</button>
+            </div>
           </div>
 
           <!-- 🎙️ 실시간 음성 진단 모니터 (스마트폰 상태 중계) -->
@@ -536,7 +541,7 @@
   <!-- Leaflet 지도 JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <!-- 메인 앱 스크립트 연결 -->
-  <script src="app.js"></script>
+  <script src="app.js?v=3.0"></script>
 
   <!-- PWA 서비스 워커 및 앱 설치 제어 -->
   <script>

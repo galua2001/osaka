@@ -462,7 +462,8 @@ function initVoices() {
 }
 
 // ==========================================
-// 모바일 브라우저 오디오 언락
+// 모바일 브라우저 오디오 언락 (Web Speech API + HTML5 Audio 완벽 해제)
+let audioUnlocker = null;
 function unlockAudio() {
   if ('speechSynthesis' in window) {
     try {
@@ -471,10 +472,17 @@ function unlockAudio() {
       window.speechSynthesis.speak(u);
     } catch (e) {}
   }
+  try {
+    if (!audioUnlocker) {
+      audioUnlocker = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+    }
+    audioUnlocker.play().then(() => { audioUnlocker.pause(); }).catch(() => {});
+  } catch (e) {}
 }
 
 let dualTurnActive = false;
 let recognizedTextBuffer = '';
+let speechSilenceTimer = null;
 
 // 실시간 음성 진단 모니터 UI 갱신 함수
 function updateMonitorUI(indicatorType, statusMsg, textMsg) {
@@ -513,6 +521,10 @@ function startDualTurn(speakerLang) {
   state.dualTurnSpeaker = speakerLang;
   dualTurnActive = true;
   recognizedTextBuffer = '';
+  if (speechSilenceTimer) {
+    clearTimeout(speechSilenceTimer);
+    speechSilenceTimer = null;
+  }
 
   const koBtn = document.getElementById('dual-speak-ko-btn');
   const jaBtn = document.getElementById('dual-listen-ja-btn');
@@ -532,8 +544,8 @@ function startDualTurn(speakerLang) {
     if (koStatus) koStatus.innerText = '🔴 듣는 중 (말씀하세요)';
     if (jaStatus) jaStatus.innerText = '대기 중';
     if (banner) banner.style.display = 'flex';
-    if (bannerText) bannerText.innerText = '🔴 한국어로 편하게 말씀하세요... (말씀이 끝나면 일본어로 번역됩니다)';
-    updateMonitorUI('listening', '마이크 활성화됨 🎙️ 말씀하세요!', '한국어로 말씀하시면 실시간으로 여기에 텍스트가 표시됩니다...');
+    if (bannerText) bannerText.innerText = '🔴 한국어로 편하게 말씀하세요...';
+    updateMonitorUI('listening', '마이크 활성화됨 🎙️ 말씀하세요!', '한국어로 말씀하시면 0.7초 후 자동으로 일본어로 번역 및 낭독됩니다.');
     showToast('🎙️ [한국어로 말씀하세요] 듣고 있습니다...');
   } else {
     // [상대방 차례] 일본어 ➔ 한국어 번역
@@ -564,21 +576,27 @@ function startDualTurn(speakerLang) {
     if (hasExecutedTranslation || !text || !text.trim()) return;
     hasExecutedTranslation = true;
 
+    if (speechSilenceTimer) {
+      clearTimeout(speechSilenceTimer);
+      speechSilenceTimer = null;
+    }
+
     try { rec.stop(); } catch (e) {}
 
     const cleanText = text.trim();
     const inputEl = document.getElementById('source-text');
     if (inputEl) inputEl.value = cleanText;
 
-    updateMonitorUI('translating', '일본어로 번역 중입니다... ⏳', `인식된 말: "${cleanText}"`);
-    showToast('⏳ 일본어로 번역 중입니다...');
+    const destLangName = speakerLang === 'ko' ? '일본어' : '한국어';
+    updateMonitorUI('translating', `${destLangName}로 번역 중입니다... ⏳`, `인식된 말: "${cleanText}"`);
+    showToast(`⏳ ${destLangName}로 번역 중입니다...`);
     await performTranslation(false);
 
     const targetTextEl = document.getElementById('target-text');
     const targetText = targetTextEl ? targetTextEl.innerText.trim() : '';
 
     if (targetText && targetText !== '번역 결과가 여기에 표시됩니다.' && !targetText.includes('오류가 발생했습니다')) {
-      updateMonitorUI('speaking', '일본어 원어민 낭독 중... 🔊', `번역 결과: "${targetText}"`);
+      updateMonitorUI('speaking', `${destLangName} 원어민 낭독 중... 🔊`, `번역 결과: "${targetText}"`);
       speakText(targetText, state.targetLang, () => {
         // 자동 티키타카(핑퐁) 대화 모드 확인
         const autoPingpong = document.getElementById('auto-pingpong-check');
@@ -600,6 +618,16 @@ function startDualTurn(speakerLang) {
     }
   }
 
+  // 외부 즉시 번역 트리거 함수 등록 (버튼 재터치 또는 '지금 번역' 클릭 시)
+  window.executeDualTranslationNow = (forcedText) => {
+    const textToRun = (forcedText || recognizedTextBuffer || document.getElementById('source-text')?.value || '').trim();
+    if (textToRun) {
+      triggerTranslation(textToRun);
+    } else {
+      stopDualTurn(true);
+    }
+  };
+
   rec.onresult = (event) => {
     let currentText = '';
     let isFinal = false;
@@ -614,16 +642,30 @@ function startDualTurn(speakerLang) {
       const inputEl = document.getElementById('source-text');
       if (inputEl) inputEl.value = currentText;
       updateMonitorUI('listening', '말씀 감지됨! 👂', `인식 중: "${currentText}"`);
+
+      // ⏱️ 묵음 자동 감지 타이머 (0.75초간 말이 멈추면 isFinal 상관없이 100% 즉시 번역 트리거)
+      if (speechSilenceTimer) clearTimeout(speechSilenceTimer);
+      speechSilenceTimer = setTimeout(() => {
+        if (!hasExecutedTranslation && recognizedTextBuffer.trim()) {
+          triggerTranslation(recognizedTextBuffer);
+        }
+      }, 750);
     }
 
     // 최종 결과가 나왔을 때 즉시 번역
     if (isFinal && currentText.trim()) {
+      if (speechSilenceTimer) clearTimeout(speechSilenceTimer);
       triggerTranslation(currentText);
     }
   };
 
   rec.onerror = (err) => {
     console.warn('Dual STT Error:', err);
+    if (speechSilenceTimer) {
+      clearTimeout(speechSilenceTimer);
+      speechSilenceTimer = null;
+    }
+
     if (err.error === 'not-allowed' || err.error === 'service-not-allowed') {
       showToast('⚠️ 마이크 사용 권한을 허용해 주세요!');
       updateMonitorUI('idle', '⚠️ 마이크 권한 차단됨', '브라우저 주소창 왼쪽 자물쇠 아이콘을 눌러 [마이크 허용]을 켜주세요.');
@@ -638,6 +680,11 @@ function startDualTurn(speakerLang) {
   };
 
   rec.onend = () => {
+    if (speechSilenceTimer) {
+      clearTimeout(speechSilenceTimer);
+      speechSilenceTimer = null;
+    }
+
     // 모바일 크롬 등에서 isFinal이 안 와서 번역이 안 돌았더라도 인식된 글자가 있으면 100% 번역 실행!
     if (!hasExecutedTranslation && recognizedTextBuffer.trim()) {
       triggerTranslation(recognizedTextBuffer);
@@ -661,6 +708,12 @@ function stopDualTurn(showMsg = true) {
   state.dualTurnSpeaker = null;
   state.isProcessingDualResult = false;
   recognizedTextBuffer = '';
+  window.executeDualTranslationNow = null;
+
+  if (speechSilenceTimer) {
+    clearTimeout(speechSilenceTimer);
+    speechSilenceTimer = null;
+  }
 
   if (state.realtimeRecognition) {
     try { state.realtimeRecognition.stop(); } catch(e) {}
@@ -1491,70 +1544,112 @@ function toggleMapSpeechRecognition() {
 }
 
 // ==========================================
-// 8. TTS 음성 합성 & 복사 & 모달
+// 8. TTS 음성 합성 & 복사 & 모달 (하이브리드: 구글 TTS 오디오 + Web Speech API)
 // ==========================================
+let currentTtsAudio = null;
+
 function speakText(text, lang = 'ja', onEndCallback = null) {
-  if (!('speechSynthesis' in window)) {
-    showToast('이 기기는 음성 재생을 지원하지 않습니다.');
-    if (onEndCallback) onEndCallback();
-    return;
-  }
-
   if (!text || text === '번역 결과가 여기에 표시됩니다.') {
-    showToast('재생할 문장이 없습니다.');
     if (onEndCallback) onEndCallback();
     return;
   }
 
-  // 모바일 기기에서 음성 목록 재로드
-  if (!state.voices || state.voices.length === 0) {
-    state.voices = window.speechSynthesis.getVoices();
+  // 이전 오디오 및 발화 즉시 정지
+  if (currentTtsAudio) {
+    try {
+      currentTtsAudio.pause();
+      currentTtsAudio.currentTime = 0;
+    } catch (e) {}
+    currentTtsAudio = null;
   }
-
-  window.speechSynthesis.cancel();
-
-  const utterance = new SpeechSynthesisUtterance(text);
-  const langCode = lang === 'ko' ? 'ko-KR' : 'ja-JP';
-  utterance.lang = langCode;
-  utterance.rate = 0.92;
-  utterance.volume = 1.0;
-
-  const voice = state.voices.find(v => v.lang === langCode || v.lang.replace('_', '-').startsWith(lang));
-  if (voice) utterance.voice = voice;
+  if ('speechSynthesis' in window) {
+    try { window.speechSynthesis.cancel(); } catch (e) {}
+  }
 
   let callbackFired = false;
   const finishSpeech = () => {
     if (!callbackFired) {
       callbackFired = true;
       state.isSpeakingNow = false;
+      if (currentTtsAudio) {
+        try { currentTtsAudio.pause(); } catch(e) {}
+        currentTtsAudio = null;
+      }
       if (onEndCallback) onEndCallback();
     }
   };
 
-  // 모바일 Safari onend 유실 대비 안전 타임아웃
-  const safetyTimeout = setTimeout(finishSpeech, Math.max(3000, text.length * 350));
+  const safetyTimeout = setTimeout(finishSpeech, Math.max(3500, text.length * 400));
+  state.isSpeakingNow = true;
+  showToast(lang === 'ja' ? '🔊 [일본어] 원어민 음성 안내 중...' : '🔊 [한국어] 음성 안내 중...');
 
-  utterance.onstart = () => {
-    state.isSpeakingNow = true;
-    showToast(lang === 'ja' ? '🔊 [일본어] 음성 안내 중...' : '🔊 [한국어] 음성 안내 중...');
-  };
-
-  utterance.onend = () => {
-    clearTimeout(safetyTimeout);
-    finishSpeech();
-  };
-
-  utterance.onerror = (e) => {
-    console.warn('TTS error:', e);
-    clearTimeout(safetyTimeout);
-    finishSpeech();
-  };
-
+  // 1차: Google 원어민 TTS 오디오 스트림 시도 (모바일 언어팩 미설치 기기 100% 대응)
+  let googleAudioStarted = false;
   try {
-    window.speechSynthesis.speak(utterance);
-  } catch (e) {
-    console.warn('SpeechSynthesis speak error:', e);
-    finishSpeech();
+    const gTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(text)}`;
+    const audio = new Audio(gTtsUrl);
+    currentTtsAudio = audio;
+
+    audio.onended = () => {
+      clearTimeout(safetyTimeout);
+      finishSpeech();
+    };
+
+    audio.onerror = (e) => {
+      console.warn('Google TTS audio load error, fallback to WebSpeech:', e);
+      if (!googleAudioStarted) fallbackWebSpeech();
+    };
+
+    const p = audio.play();
+    if (p !== undefined) {
+      p.then(() => {
+        googleAudioStarted = true;
+      }).catch((err) => {
+        console.warn('Google Audio play prevented, fallback to WebSpeech:', err);
+        fallbackWebSpeech();
+      });
+    }
+  } catch (err) {
+    fallbackWebSpeech();
+  }
+
+  // 2차: Web Speech API 폴백
+  function fallbackWebSpeech() {
+    if (!('speechSynthesis' in window)) {
+      clearTimeout(safetyTimeout);
+      finishSpeech();
+      return;
+    }
+
+    if (!state.voices || state.voices.length === 0) {
+      state.voices = window.speechSynthesis.getVoices();
+    }
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    const langCode = lang === 'ko' ? 'ko-KR' : 'ja-JP';
+    utterance.lang = langCode;
+    utterance.rate = 0.92;
+    utterance.volume = 1.0;
+
+    const voice = state.voices.find(v => v.lang === langCode || v.lang.replace('_', '-').startsWith(lang));
+    if (voice) utterance.voice = voice;
+
+    utterance.onend = () => {
+      clearTimeout(safetyTimeout);
+      finishSpeech();
+    };
+
+    utterance.onerror = () => {
+      clearTimeout(safetyTimeout);
+      finishSpeech();
+    };
+
+    try {
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      clearTimeout(safetyTimeout);
+      finishSpeech();
+    }
   }
 }
 
@@ -1769,13 +1864,19 @@ function setupEventListeners() {
   const translateBtn = document.getElementById('translate-btn');
   if (translateBtn) translateBtn.addEventListener('click', () => performTranslation());
 
-  // 양방향 실시간 티키타카 대화 통역 (내가 말하기 & 상대방 답변 듣기)
+  // 양방향 실시간 대화 통역 (내가 한국어로 말하기 & 상대방 일본어로 답변 듣기)
   const dualKoBtn = document.getElementById('dual-speak-ko-btn');
   if (dualKoBtn) {
     dualKoBtn.addEventListener('click', () => {
       unlockAudio();
       if (state.dualTurnSpeaker === 'ko') {
-        stopDualTurn(true);
+        const buffered = (recognizedTextBuffer || document.getElementById('source-text')?.value || '').trim();
+        if (buffered && typeof window.executeDualTranslationNow === 'function') {
+          // 이미 말한 내용이 있으면 터치 시 취소하지 않고 즉시 번역 실행!
+          window.executeDualTranslationNow(buffered);
+        } else {
+          stopDualTurn(true);
+        }
       } else {
         startDualTurn('ko');
       }
@@ -1787,9 +1888,28 @@ function setupEventListeners() {
     dualJaBtn.addEventListener('click', () => {
       unlockAudio();
       if (state.dualTurnSpeaker === 'ja') {
-        stopDualTurn(true);
+        const buffered = (recognizedTextBuffer || document.getElementById('source-text')?.value || '').trim();
+        if (buffered && typeof window.executeDualTranslationNow === 'function') {
+          window.executeDualTranslationNow(buffered);
+        } else {
+          stopDualTurn(true);
+        }
       } else {
         startDualTurn('ja');
+      }
+    });
+  }
+
+  // 실시간 청취 배너의 [⚡ 지금 번역] 및 [중단/취소] 버튼
+  const dualNowBtn = document.getElementById('dual-now-btn');
+  if (dualNowBtn) {
+    dualNowBtn.addEventListener('click', () => {
+      unlockAudio();
+      const buffered = (recognizedTextBuffer || document.getElementById('source-text')?.value || '').trim();
+      if (buffered && typeof window.executeDualTranslationNow === 'function') {
+        window.executeDualTranslationNow(buffered);
+      } else {
+        performTranslation(false);
       }
     });
   }
@@ -1813,12 +1933,6 @@ function setupEventListeners() {
       await performTranslation(false);
     });
   });
-
-  // 실시간 음성(말하기) 통역 메인 버튼 이벤트
-  const realtimeVoiceBtn = document.getElementById('realtime-voice-btn');
-  if (realtimeVoiceBtn) {
-    realtimeVoiceBtn.addEventListener('click', toggleRealtimeVoice);
-  }
 
   // 타이핑 시 실시간 번역 (디바운스 400ms)
   const sourceText = document.getElementById('source-text');
