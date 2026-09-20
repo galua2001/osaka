@@ -1986,11 +1986,11 @@ function startVoiceTurn(speakerLang) {
     const rec = new SpeechRecognition();
     voiceTurnRec = rec;
     rec.lang = speakerLang === 'ko' ? 'ko-KR' : 'ja-JP';
-    rec.continuous = false; // 모바일 Safari 및 Chrome에서 100% 끊김 없는 최적 규격
+    rec.continuous = true; // 끊기지 않고 끝까지 듣기 (71e2d2e 정상 작동 규격)
     rec.interimResults = true;
 
     rec.onstart = () => {
-      // 음성 인식 정상 시작
+      // 음성 인식 시작
     };
 
     rec.onresult = (event) => {
@@ -2010,10 +2010,11 @@ function startVoiceTurn(speakerLang) {
         voiceTurnBuffer = currentSpoken;
         if (streamText) streamText.innerText = `🗣️ "${currentSpoken}"`;
 
-        if (finalTranscript && !isTranslatingVoiceTurn) {
-          // 문장이 완성되면 즉시 락을 걸고 번역 실행
+        // 묵음 감지 타이머 (850ms 동안 말이 멈추면 자동 번역 트리거)
+        if (voiceSilenceTimer) clearTimeout(voiceSilenceTimer);
+        voiceSilenceTimer = setTimeout(() => {
           stopVoiceTurn(true);
-        }
+        }, 850);
       }
     };
 
@@ -2025,19 +2026,19 @@ function startVoiceTurn(speakerLang) {
         else showToast('⚠️ 마이크 권한이 차단되었습니다. 브라우저 설정에서 마이크를 허용해 주세요.');
         resetVoiceTurnUI();
       } else if (err.error === 'no-speech') {
-        if (streamText) streamText.innerText = '🎙️ 말씀이 감지되지 않았습니다. 다시 말씀해 주세요.';
-        resetVoiceTurnUI();
+        // 말이 잠시 멈춘 것은 무시하고 계속 청취
       } else {
         resetVoiceTurnUI();
       }
     };
 
     rec.onend = () => {
-      // race condition 방지: 이미 번역 중이 아니고 버퍼가 있으면 번역 실행
-      if (activeVoiceSpeaker && voiceTurnBuffer && !isTranslatingVoiceTurn) {
-        stopVoiceTurn(true);
-      } else if (!isTranslatingVoiceTurn) {
-        resetVoiceTurnUI();
+      if (activeVoiceSpeaker) {
+        if (voiceTurnBuffer && !isTranslatingVoiceTurn) {
+          stopVoiceTurn(true);
+        } else {
+          resetVoiceTurnUI();
+        }
       }
     };
 
@@ -2109,33 +2110,33 @@ async function triggerVoiceTranslate(text, fromLang) {
   let translated = '';
   let rawRomaji = '';
 
-  // 1차: Chrome 공식 초고속 무제한 번역 API (차단 0%, 0.05초 초고속)
+  // 1차: MyMemory 번역 (브라우저 CORS 100% 정상 통과)
   try {
-    const cUrl = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=${fromLang}&tl=${toLang}&q=${encodeURIComponent(text)}`;
-    const cResp = await fetch(cUrl);
-    if (cResp.ok) {
-      const cData = await cResp.json();
-      if (Array.isArray(cData) && cData.length > 0 && typeof cData[0] === 'string') {
-        translated = cData[0];
+    const mUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${fromLang}|${toLang}`;
+    const mResp = await fetch(mUrl);
+    if (mResp.ok) {
+      const mData = await mResp.json();
+      if (mData && mData.responseData && mData.responseData.translatedText) {
+        translated = mData.responseData.translatedText;
       }
     }
-  } catch (cErr) {
-    console.warn('Chrome Translate API error:', cErr);
+  } catch (mErr) {
+    console.warn('MyMemory API error:', mErr);
   }
 
-  // 2차 백업: MyMemory 번역 (일 50,000단어)
+  // 2차 백업: Chrome / Google API
   if (!translated) {
     try {
-      const mUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${fromLang}|${toLang}&de=osakatrip2026@gmail.com`;
-      const mResp = await fetch(mUrl);
-      if (mResp.ok) {
-        const mData = await mResp.json();
-        if (mData && mData.responseData && mData.responseData.translatedText) {
-          translated = mData.responseData.translatedText;
+      const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${fromLang}&tl=${toLang}&dt=t&dt=rm&q=${encodeURIComponent(text)}`;
+      const resp = await fetch(gUrl);
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data && data[0]) {
+          translated = data[0].filter(it => it[0]).map(it => it[0]).join('');
         }
       }
-    } catch (mErr) {
-      console.warn('MyMemory API error:', mErr);
+    } catch (gErr) {
+      console.warn('Google single API error:', gErr);
     }
   }
 
@@ -2484,29 +2485,29 @@ async function processPhotoFile(file) {
     // 4. 추출된 일본어 ➔ 한국어 번역
     let translatedText = '';
     try {
-      const cUrl = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=ja&tl=ko&q=${encodeURIComponent(recognizedText)}`;
-      const cResp = await fetch(cUrl);
-      if (cResp.ok) {
-        const cData = await cResp.json();
-        if (Array.isArray(cData) && cData.length > 0 && typeof cData[0] === 'string') {
-          translatedText = cData[0];
+      const mUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(recognizedText)}&langpair=ja|ko`;
+      const mResp = await fetch(mUrl);
+      if (mResp.ok) {
+        const mData = await mResp.json();
+        if (mData && mData.responseData && mData.responseData.translatedText) {
+          translatedText = mData.responseData.translatedText;
         }
       }
-    } catch (err) {
-      console.warn('Translate error:', err);
-    }
+    } catch(e) {}
 
     if (!translatedText) {
       try {
-        const mUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(recognizedText)}&langpair=ja|ko&de=osakatrip2026@gmail.com`;
-        const mResp = await fetch(mUrl);
-        if (mResp.ok) {
-          const mData = await mResp.json();
-          if (mData && mData.responseData && mData.responseData.translatedText) {
-            translatedText = mData.responseData.translatedText;
+        const cUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=ja&tl=ko&dt=t&q=${encodeURIComponent(recognizedText)}`;
+        const cResp = await fetch(cUrl);
+        if (cResp.ok) {
+          const cData = await cResp.json();
+          if (cData && cData[0]) {
+            translatedText = cData[0].map(it => it[0]).join('');
           }
         }
-      } catch(e) {}
+      } catch (err) {
+        console.warn('Translate error:', err);
+      }
     }
 
     if (!translatedText) {
@@ -2567,27 +2568,27 @@ async function executePhotoTextLookup(query) {
 
   let translated = '';
   try {
-    const cUrl = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=auto&tl=ko&q=${encodeURIComponent(clean)}`;
-    const cResp = await fetch(cUrl);
-    if (cResp.ok) {
-      const cData = await cResp.json();
-      if (Array.isArray(cData) && cData.length > 0 && typeof cData[0] === 'string') {
-        translated = cData[0];
+    const mUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(clean)}&langpair=ja|ko`;
+    const mResp = await fetch(mUrl);
+    if (mResp.ok) {
+      const mData = await mResp.json();
+      if (mData && mData.responseData && mData.responseData.translatedText) {
+        translated = mData.responseData.translatedText;
       }
     }
-  } catch (e) {}
+  } catch(e) {}
 
   if (!translated) {
     try {
-      const mUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(clean)}&langpair=ja|ko&de=osakatrip2026@gmail.com`;
-      const mResp = await fetch(mUrl);
-      if (mResp.ok) {
-        const mData = await mResp.json();
-        if (mData && mData.responseData && mData.responseData.translatedText) {
-          translated = mData.responseData.translatedText;
+      const cUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ko&dt=t&q=${encodeURIComponent(clean)}`;
+      const cResp = await fetch(cUrl);
+      if (cResp.ok) {
+        const cData = await cResp.json();
+        if (cData && cData[0]) {
+          translated = cData[0].map(it => it[0]).join('');
         }
       }
-    } catch(e) {}
+    } catch (e) {}
   }
 
   if (!translated) translated = clean;
