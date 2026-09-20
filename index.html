@@ -3,7 +3,34 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>OsakaGo - 오사카 여행 일본어 번역기 & 길찾기 지도 & 맛집 가이드</title>
+
+  <!-- 강력한 모바일 캐시 영구 파괴 & 서비스 워커 즉시 제거 스크립트 -->
+  <script>
+    (function() {
+      // 1. 모든 서비스 워커 강제 해제
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for (var i = 0; i < registrations.length; i++) {
+            registrations[i].unregister();
+            console.log('[OsakaGo] 구버전 서비스워커 강제 해제 완료');
+          }
+        }).catch(function(e) {});
+      }
+      // 2. 모든 캐시 스토리지 영구 삭제
+      if ('caches' in window) {
+        caches.keys().then(function(names) {
+          for (var i = 0; i < names.length; i++) {
+            caches.delete(names[i]);
+            console.log('[OsakaGo] 구버전 캐시 삭제:', names[i]);
+          }
+        }).catch(function(e) {});
+      }
+    })();
+  </script>
   
   <!-- PWA 웹앱 설치 지원 -->
   <link rel="manifest" href="manifest.json">
@@ -21,7 +48,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   
   <!-- 앱 스타일시트 -->
-  <link rel="stylesheet" href="style.css?v=5.0">
+  <link rel="stylesheet" href="style.css?v=5.1">
   <link rel="icon" href="icon-192.png">
 </head>
 <body>
@@ -46,6 +73,18 @@
         <span class="header-subbadge">오사카 가이드</span>
       </div>
     </header>
+
+    <!-- 🔥 스마트폰 캐시 탈출 & 최신 버전 즉시 동기화 바 -->
+    <div class="force-refresh-bar" onclick="window.location.href=window.location.origin+window.location.pathname+'?v=5.1&t='+Date.now()" style="background: linear-gradient(135deg, #EFF6FF, #DBEAFE); border: 1.5px solid #3B82F6; border-radius: 12px; margin: 10px 16px 4px 16px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; box-shadow: 0 2px 6px rgba(59,130,246,0.15);">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 18px;">🔄</span>
+        <div style="text-align: left;">
+          <div style="font-size: 12.5px; font-weight: 800; color: #1D4ED8;">최신 v5.1 버전 적용 완료!</div>
+          <div style="font-size: 11px; color: #3B82F6;">화면이 안 바뀔 땐 여기를 터치해 즉시 새로고침하세요</div>
+        </div>
+      </div>
+      <span style="background: #2563EB; color: #FFF; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 6px;">새로고침</span>
+    </div>
 
     <!-- PWA 앱 설치 유도 배너 -->
     <div class="pwa-install-banner" id="pwa-install-banner">
@@ -621,9 +660,9 @@
   <!-- Tesseract.js (일본어 사진 고속 OCR 엔진) -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <!-- 메인 앱 스크립트 연결 -->
-  <script src="app.js?v=5.0"></script>
+  <script src="app.js?v=5.1"></script>
 
-  <!-- PWA 서비스 워커 및 앱 설치 제어 -->
+  <!-- PWA 서비스 워커 관리 및 앱 설치 제어 -->
   <script>
     // 이미 앱(스탠드얼론)으로 실행 중인지 확인
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -644,13 +683,11 @@
       });
     }
 
-    // 서비스 워커 등록
+    // 서비스 워커 등록 중단 및 브라우저 잔여 워커 안전 해제
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-          .then(reg => console.log('OsakaGo PWA ServiceWorker active:', reg.scope))
-          .catch(err => console.warn('SW register failed:', err));
-      });
+      navigator.serviceWorker.getRegistrations().then(function(regs) {
+        for (var r of regs) r.unregister();
+      }).catch(function(e) {});
     }
 
     let pwaInstallEvent = null;
