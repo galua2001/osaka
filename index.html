@@ -5,6 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>OsakaGo - 오사카 여행 일본어 번역기 & 길찾기 지도 & 맛집 가이드</title>
   
+  <!-- PWA 웹앱 설치 지원 -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#2563EB">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="OsakaGo">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+
   <!-- Pretendard 모던 폰트 -->
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   
@@ -13,7 +22,7 @@
   
   <!-- 앱 스타일시트 -->
   <link rel="stylesheet" href="style.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐙</text></svg>">
+  <link rel="icon" href="icon-192.png">
 </head>
 <body>
 
@@ -37,6 +46,18 @@
         <span class="header-subbadge">오사카 가이드</span>
       </div>
     </header>
+
+    <!-- PWA 앱 설치 유도 배너 -->
+    <div class="pwa-install-banner" id="pwa-install-banner" style="display: none;">
+      <div class="pwa-install-content">
+        <span class="pwa-app-icon">📲</span>
+        <div class="pwa-install-text">
+          <strong>스마트폰에 OsakaGo 앱 설치</strong>
+          <span>주소창 없이 진짜 어플처럼 전체화면으로 빠르게 쓰세요!</span>
+        </div>
+      </div>
+      <button class="pwa-install-action-btn" id="pwa-install-btn">앱 설치하기</button>
+    </div>
 
     <!-- 2. 메인 콘텐츠 영역 -->
     <main class="content-wrapper">
@@ -453,5 +474,46 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <!-- 메인 앱 스크립트 연결 -->
   <script src="app.js"></script>
+
+  <!-- PWA 서비스 워커 및 앱 설치 제어 -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('OsakaGo PWA ServiceWorker active:', reg.scope))
+          .catch(err => console.warn('SW register failed:', err));
+      });
+    }
+
+    let pwaInstallEvent = null;
+    const installBanner = document.getElementById('pwa-install-banner');
+    const installBtn = document.getElementById('pwa-install-btn');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      pwaInstallEvent = e;
+      if (installBanner) installBanner.style.display = 'flex';
+    });
+
+    if (installBtn) {
+      installBtn.addEventListener('click', async () => {
+        if (pwaInstallEvent) {
+          pwaInstallEvent.prompt();
+          const { outcome } = await pwaInstallEvent.userChoice;
+          if (outcome === 'accepted') {
+            if (installBanner) installBanner.style.display = 'none';
+          }
+          pwaInstallEvent = null;
+        } else {
+          alert('크롬 브라우저 메뉴(우측 상단 점 3개)에서 [앱 설치] 또는 [홈 화면에 추가]를 눌러주세요!');
+        }
+      });
+    }
+
+    window.addEventListener('appinstalled', () => {
+      if (installBanner) installBanner.style.display = 'none';
+      pwaInstallEvent = null;
+    });
+  </script>
 </body>
 </html>
