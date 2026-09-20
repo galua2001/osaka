@@ -428,18 +428,24 @@ const phraseDatabase = [
 // ==========================================
 // 4. 앱 초기화
 // ==========================================
-document.addEventListener('DOMContentLoaded', () => {
-  initPlans();
-  initVoices();
-  initSpeechRecognition();
-  initMapSpeechRecognition();
-  initLeafletMap();
-  renderPhrases();
-  renderFoodList();
-  renderPlans();
-  initLiveDialog();
-  setupEventListeners();
-});
+function initializeApp() {
+  try { initPlans(); } catch(e) { console.warn('initPlans error:', e); }
+  try { initVoices(); } catch(e) { console.warn('initVoices error:', e); }
+  try { initSpeechRecognition(); } catch(e) { console.warn('initSpeechRecognition error:', e); }
+  try { initMapSpeechRecognition(); } catch(e) { console.warn('initMapSpeechRecognition error:', e); }
+  try { initLeafletMap(); } catch(e) { console.warn('initLeafletMap error:', e); }
+  try { renderPhrases(); } catch(e) { console.warn('renderPhrases error:', e); }
+  try { renderFoodList(); } catch(e) { console.warn('renderFoodList error:', e); }
+  try { renderPlans(); } catch(e) { console.warn('renderPlans error:', e); }
+  try { initLiveDialog(); } catch(e) { console.warn('initLiveDialog error:', e); }
+  try { setupEventListeners(); } catch(e) { console.error('setupEventListeners error:', e); }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeApp);
+} else {
+  initializeApp();
+}
 
 function initPlans() {
   if (!state.plans) {
@@ -1910,7 +1916,12 @@ function toggleVoiceSpeaker(speakerLang) {
 function startVoiceTurn(speakerLang) {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
-    showToast('⚠️ 현재 브라우저에서는 음성 인식을 지원하지 않습니다. Chrome 앱으로 접속해 주세요.');
+    const micModal = document.getElementById('mic-guide-modal');
+    if (micModal) {
+      micModal.classList.add('active');
+    } else {
+      showToast('⚠️ 카카오톡/네이버 앱에서는 마이크가 차단됩니다. Chrome 앱으로 열어주세요.');
+    }
     return;
   }
 
@@ -2001,7 +2012,9 @@ function startVoiceTurn(speakerLang) {
     rec.onerror = (err) => {
       console.warn('Voice STT Error:', err);
       if (err.error === 'not-allowed') {
-        showToast('⚠️ 마이크 권한이 차단되었습니다. 브라우저 설정에서 마이크를 허용해 주세요.');
+        const micModal = document.getElementById('mic-guide-modal');
+        if (micModal) micModal.classList.add('active');
+        else showToast('⚠️ 마이크 권한이 차단되었습니다. 브라우저 설정에서 마이크를 허용해 주세요.');
         resetVoiceTurnUI();
       } else if (err.error === 'no-speech') {
         if (streamText) streamText.innerText = '🎙️ 듣고 있습니다... 마이크에 대고 말씀해주세요!';
@@ -2652,6 +2665,13 @@ function setupEventListeners() {
 
   // 📸 사진 촬영 & 갤러리 글자 해석(OCR) 및 여행 설명 이벤트 리스너 바인딩
   const photoFileInput = document.getElementById('photo-file-input');
+  const photoCameraBtn = document.getElementById('photo-camera-btn');
+  if (photoCameraBtn && photoFileInput) {
+    photoCameraBtn.addEventListener('click', () => {
+      unlockAudio();
+      photoFileInput.click();
+    });
+  }
   if (photoFileInput) {
     photoFileInput.addEventListener('change', function(e) {
       if (e.target.files && e.target.files[0]) {
@@ -2662,12 +2682,34 @@ function setupEventListeners() {
   }
 
   const galleryFileInput = document.getElementById('gallery-file-input');
+  const galleryFileBtn = document.getElementById('gallery-file-btn');
+  if (galleryFileBtn && galleryFileInput) {
+    galleryFileBtn.addEventListener('click', () => {
+      unlockAudio();
+      galleryFileInput.click();
+    });
+  }
   if (galleryFileInput) {
     galleryFileInput.addEventListener('change', function(e) {
       if (e.target.files && e.target.files[0]) {
         processPhotoFile(e.target.files[0]);
       }
       this.value = '';
+    });
+  }
+
+  // 마이크 가이드 모달 닫기
+  const micGuideModal = document.getElementById('mic-guide-modal');
+  const micGuideCloseBtn = document.getElementById('mic-guide-close-btn');
+  const micGuideConfirmBtn = document.getElementById('mic-guide-confirm-btn');
+  function closeMicGuide() {
+    if (micGuideModal) micGuideModal.classList.remove('active');
+  }
+  if (micGuideCloseBtn) micGuideCloseBtn.addEventListener('click', closeMicGuide);
+  if (micGuideConfirmBtn) micGuideConfirmBtn.addEventListener('click', closeMicGuide);
+  if (micGuideModal) {
+    micGuideModal.addEventListener('click', (e) => {
+      if (e.target === micGuideModal) closeMicGuide();
     });
   }
 
@@ -2685,8 +2727,7 @@ function setupEventListeners() {
   const photoRetryBtn = document.getElementById('photo-retry-btn');
   if (photoRetryBtn) {
     photoRetryBtn.addEventListener('click', () => {
-      const fi = document.getElementById('photo-file-input');
-      if (fi) fi.click();
+      if (photoFileInput) photoFileInput.click();
     });
   }
 

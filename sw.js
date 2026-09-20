@@ -1,10 +1,6 @@
-// OsakaGo PWA Service Worker
-const CACHE_NAME = 'osakago-v4.6';
+// OsakaGo PWA Service Worker v5.0 (Force Fresh)
+const CACHE_NAME = 'osakago-v5.0-fresh';
 const ASSETS_TO_CACHE = [
-  './',
-  './index.html',
-  './style.css',
-  './app.js',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
@@ -12,10 +8,11 @@ const ASSETS_TO_CACHE = [
 ];
 
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(ASSETS_TO_CACHE);
-    }).then(() => self.skipWaiting())
+    })
   );
 });
 
@@ -23,16 +20,21 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+        keys.map((key) => {
+          if (key !== CACHE_NAME) {
+            console.log('Deleting old SW cache:', key);
+            return caches.delete(key);
+          }
+        })
       );
     }).then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', (event) => {
-  // Network first, fallback to cache
+  // HTML, JS, CSS는 항상 최신 네트워크 데이터를 우선 가져오고 캐시 무효화 보장
   event.respondWith(
-    fetch(event.request).catch(() => {
+    fetch(event.request, { cache: 'no-cache' }).catch(() => {
       return caches.match(event.request);
     })
   );
