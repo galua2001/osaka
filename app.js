@@ -1925,11 +1925,16 @@ let lastOriginalText = '';
 let lastPronunciationText = '';
 
 function toggleVoiceSpeaker(speakerLang) {
-  if (activeVoiceSpeaker === speakerLang) {
-    // 이미 이 언어로 듣는 중이면 즉시 종료 및 번역
-    stopVoiceTurn(true);
+  if (activeVoiceSpeaker) {
+    if (activeVoiceSpeaker === speakerLang) {
+      // 🗣️ 말하던 중 같은 버튼을 다시 누름: 즉시 말끝 인식 & 1회만 정확히 번역!
+      stopVoiceTurn(true);
+    } else {
+      // 다른 언어 버튼을 누름: 이전 인식 취소하고 새 언어로 전환
+      stopVoiceTurn(false);
+      startVoiceTurn(speakerLang);
+    }
   } else {
-    // 다른 언어가 켜져 있으면 끄고 새 언어 시작
     startVoiceTurn(speakerLang);
   }
 }
@@ -1949,9 +1954,26 @@ function startVoiceTurn(speakerLang) {
   // 모바일 오디오 재생 락 즉시 사전 해제 (Autoplay Policy 필수 하네스)
   unlockAudio();
 
-  // 기존 세션 정리
+  // 🛡️ 마이크를 켤 때 이전 낭독 중이던 오디오 즉시 정지 (스피커 소리가 마이크로 재유입되는 현상 차단)
+  if (state.isSpeakingNow) {
+    if (currentTtsAudio) {
+      try { currentTtsAudio.pause(); } catch(e) {}
+      currentTtsAudio = null;
+    }
+    if ('speechSynthesis' in window) {
+      try { window.speechSynthesis.cancel(); } catch(e) {}
+    }
+    state.isSpeakingNow = false;
+  }
+
+  // 기존 세션 깨끗이 정리
   if (voiceTurnRec) {
-    try { voiceTurnRec.abort(); } catch(e) {}
+    try {
+      voiceTurnRec.onresult = null;
+      voiceTurnRec.onerror = null;
+      voiceTurnRec.onend = null;
+      voiceTurnRec.abort();
+    } catch(e) {}
     voiceTurnRec = null;
   }
   if (voiceSilenceTimer) {
@@ -1998,14 +2020,15 @@ function startVoiceTurn(speakerLang) {
     const rec = new SpeechRecognition();
     voiceTurnRec = rec;
     rec.lang = speakerLang === 'ko' ? 'ko-KR' : 'ja-JP';
-    rec.continuous = true; // 끊기지 않고 끝까지 듣기 (71e2d2e 정상 작동 규격)
+    rec.continuous = true;
     rec.interimResults = true;
 
-    rec.onstart = () => {
-      // 음성 인식 시작
-    };
+    rec.onstart = () => {};
 
     rec.onresult = (event) => {
+      // 🛡️ 번역 중이거나 이미 세션이 닫혔으면 잔여 패킷 무시
+      if (isTranslatingVoiceTurn || !activeVoiceSpeaker) return;
+
       let fullTranscript = '';
       for (let i = 0; i < event.results.length; ++i) {
         fullTranscript += event.results[i][0].transcript;
@@ -2016,11 +2039,11 @@ function startVoiceTurn(speakerLang) {
         voiceTurnBuffer = currentSpoken;
         if (streamText) streamText.innerText = `🗣️ "${currentSpoken}"`;
 
-        // 묵음 감지 타이머 (850ms 동안 말이 멈추면 자동 번역 트리거)
+        // ⏱️ 묵음 감지 타이머: 1400ms(1.4초)로 여유를 주어 말이 중간에 끊겨 2번 번역되는 현상 완벽 방지!
         if (voiceSilenceTimer) clearTimeout(voiceSilenceTimer);
         voiceSilenceTimer = setTimeout(() => {
           stopVoiceTurn(true);
-        }, 850);
+        }, 1400);
       }
     };
 
@@ -2032,7 +2055,7 @@ function startVoiceTurn(speakerLang) {
         else showToast('⚠️ 마이크 권한이 차단되었습니다. 브라우저 설정에서 마이크를 허용해 주세요.');
         resetVoiceTurnUI();
       } else if (err.error === 'no-speech') {
-        // 말이 잠시 멈춘 것은 무시하고 계속 청취
+        // 말이 잠시 멈춘 것은 타이머가 처리하므로 무시
       } else {
         resetVoiceTurnUI();
       }
@@ -2067,14 +2090,17 @@ function stopVoiceTurn(doTranslate = false) {
   const textToTranslate = voiceTurnBuffer.trim();
   const currentSpeaker = activeVoiceSpeaker;
 
-  // 🛡️ 버퍼와 스피커 상태 즉시 초기화 (중복 실행 방지)
+  // 🛡️ 버퍼와 스피커 상태 즉시 초기화 (중복 실행 원천 차단)
   voiceTurnBuffer = '';
   activeVoiceSpeaker = null;
 
   if (voiceTurnRec) {
     try {
-      voiceTurnRec.onend = null; // onend 연쇄 호출 방지
-      voiceTurnRec.stop();
+      // 🛡️ 모든 이벤트 리스너를 완전히 끊어서 잔여 패킷으로 인한 2차 번역 완전 차단!
+      voiceTurnRec.onresult = null;
+      voiceTurnRec.onerror = null;
+      voiceTurnRec.onend = null;
+      voiceTurnRec.abort();
     } catch(e) {}
     voiceTurnRec = null;
   }
