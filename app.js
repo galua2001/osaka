@@ -580,6 +580,20 @@ function startDualTurn(speakerLang) {
   // 번역 실행 헬퍼 (중복 실행 방지)
   async function triggerTranslation(text) {
     let cleanText = (text || '').trim();
+    function removeStutterWords(str) {
+      if (!str) return str;
+      const words = str.trim().split(/\s+/);
+      for (let len = Math.floor(words.length / 2); len >= 1; len--) {
+          const firstHalf = words.slice(0, len).join('');
+          const secondHalf = words.slice(len, len * 2).join('');
+          if (firstHalf === secondHalf) {
+              return words.slice(len).join(' ');
+          }
+      }
+      return str;
+    }
+    cleanText = removeStutterWords(cleanText);
+
     if (hasExecutedTranslation || !cleanText) return;
     hasExecutedTranslation = true;
 
@@ -2157,6 +2171,24 @@ function resetVoiceTurnUI() {
 async function triggerVoiceTranslate(text, fromLang) {
   let cleanText = (text || '').trim();
   
+  // 안드로이드 크롬 STT 중복 반복(Stutter) 버그 텍스트 필터링 (정규식 룩비하인드 제외 안전버전)
+  // "안녕하세요 안녕하세요 화장실" -> "안녕하세요 화장실"
+  function removeStutterWords(str) {
+    if (!str) return str;
+    const words = str.trim().split(/\s+/);
+    // 가장 긴 패턴부터 검사해서 잘라냄
+    for (let len = Math.floor(words.length / 2); len >= 1; len--) {
+        const firstHalf = words.slice(0, len).join('');
+        const secondHalf = words.slice(len, len * 2).join('');
+        if (firstHalf === secondHalf) {
+            return words.slice(len).join(' ');
+        }
+    }
+    return str;
+  }
+  
+  cleanText = removeStutterWords(cleanText);
+
   if (!cleanText || isTranslatingVoiceTurn) return;
 
   // 🛡️ 동일 문장 1.5초 내 중복 번역 방지 (두 번 나오는 현상 원천 차단)
