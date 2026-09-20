@@ -1684,3 +1684,100 @@ body {
 .pwa-install-action-btn:hover {
   background: #1D4ED8;
 }
+
+/* ==========================================
+   실시간 음성 진단 모니터 & 원클릭 표현 칩
+   ========================================== */
+.voice-live-monitor {
+  background: #0F172A;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-top: 10px;
+}
+
+.vlm-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.vlm-indicator {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: #1E293B;
+  color: #94A3B8;
+}
+
+.vlm-indicator.listening {
+  background: #DC2626;
+  color: #FFFFFF;
+  animation: pulse 1.2s infinite;
+}
+
+.vlm-indicator.translating {
+  background: #D97706;
+  color: #FFFFFF;
+}
+
+.vlm-indicator.speaking {
+  background: #16A34A;
+  color: #FFFFFF;
+}
+
+.vlm-status {
+  font-size: 12px;
+  font-weight: 700;
+  color: #E2E8F0;
+}
+
+.vlm-text {
+  font-size: 13px;
+  color: #38BDF8;
+  min-height: 20px;
+  word-break: break-word;
+  font-weight: 600;
+}
+
+/* 원클릭 인스턴트 표현 칩 */
+.instant-talk-section {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed #E2E8F0;
+}
+
+.instant-talk-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748B;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.instant-talk-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.instant-chip {
+  background: #F8FAFC;
+  border: 1px solid #CBD5E1;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.instant-chip:active {
+  background: #2563EB;
+  color: #FFFFFF;
+  border-color: #2563EB;
+  transform: scale(0.96);
+}

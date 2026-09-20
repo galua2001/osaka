@@ -476,6 +476,23 @@ function unlockAudio() {
 let dualTurnActive = false;
 let recognizedTextBuffer = '';
 
+// 실시간 음성 진단 모니터 UI 갱신 함수
+function updateMonitorUI(indicatorType, statusMsg, textMsg) {
+  const indicator = document.getElementById('vlm-indicator');
+  const status = document.getElementById('vlm-status');
+  const text = document.getElementById('vlm-text');
+
+  if (indicator) {
+    indicator.className = 'vlm-indicator ' + (indicatorType || '');
+    if (indicatorType === 'listening') indicator.innerText = '🔴 청취 중';
+    else if (indicatorType === 'translating') indicator.innerText = '⏳ 번역 중';
+    else if (indicatorType === 'speaking') indicator.innerText = '🔊 낭독 중';
+    else indicator.innerText = '⚪ 대기';
+  }
+  if (status) status.innerText = statusMsg || '';
+  if (text) text.innerText = textMsg || '';
+}
+
 // ==========================================
 // 4-1. 양방향 실시간 티키타카 대화 통역 엔진
 // ==========================================
@@ -483,6 +500,7 @@ function startDualTurn(speakerLang) {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
     showToast('⚠️ 이 기기/브라우저는 음성 인식을 지원하지 않습니다. Chrome을 이용해 주세요.');
+    updateMonitorUI('idle', '⚠️ 음성 인식 미지원', '이 브라우저는 음성 인식을 지원하지 않습니다. Chrome 앱으로 접속해 주세요.');
     return;
   }
 
@@ -515,6 +533,7 @@ function startDualTurn(speakerLang) {
     if (jaStatus) jaStatus.innerText = '대기 중';
     if (banner) banner.style.display = 'flex';
     if (bannerText) bannerText.innerText = '🔴 한국어로 편하게 말씀하세요... (말씀이 끝나면 일본어로 번역됩니다)';
+    updateMonitorUI('listening', '마이크 활성화됨 🎙️ 말씀하세요!', '한국어로 말씀하시면 실시간으로 여기에 텍스트가 표시됩니다...');
     showToast('🎙️ [한국어로 말씀하세요] 듣고 있습니다...');
   } else {
     // [상대방 차례] 일본어 ➔ 한국어 번역
@@ -528,6 +547,7 @@ function startDualTurn(speakerLang) {
     if (koStatus) koStatus.innerText = '대기 중';
     if (banner) banner.style.display = 'flex';
     if (bannerText) bannerText.innerText = '👂 상대방의 일본어 답변을 듣고 있습니다...';
+    updateMonitorUI('listening', '일본어 청취 중 👂', '상대방 일본인이 말씀하시면 한국어로 번역됩니다...');
     showToast('👂 [일본어 듣는 중] 상대방이 말씀하게 해주세요...');
   }
 
@@ -550,6 +570,7 @@ function startDualTurn(speakerLang) {
     const inputEl = document.getElementById('source-text');
     if (inputEl) inputEl.value = cleanText;
 
+    updateMonitorUI('translating', '일본어로 번역 중입니다... ⏳', `인식된 말: "${cleanText}"`);
     showToast('⏳ 일본어로 번역 중입니다...');
     await performTranslation(false);
 
@@ -557,6 +578,7 @@ function startDualTurn(speakerLang) {
     const targetText = targetTextEl ? targetTextEl.innerText.trim() : '';
 
     if (targetText && targetText !== '번역 결과가 여기에 표시됩니다.' && !targetText.includes('오류가 발생했습니다')) {
+      updateMonitorUI('speaking', '일본어 원어민 낭독 중... 🔊', `번역 결과: "${targetText}"`);
       speakText(targetText, state.targetLang, () => {
         // 자동 티키타카(핑퐁) 대화 모드 확인
         const autoPingpong = document.getElementById('auto-pingpong-check');
@@ -569,10 +591,12 @@ function startDualTurn(speakerLang) {
           }, 600);
         } else {
           stopDualTurn(false);
+          updateMonitorUI('idle', '통역 완료 ✨', `결과: "${targetText}"`);
         }
       });
     } else {
       stopDualTurn(false);
+      updateMonitorUI('idle', '번역 실패 또는 결과 없음', '다시 말씀해 주시거나 아래 원클릭 버튼을 이용해 보세요.');
     }
   }
 
@@ -589,6 +613,7 @@ function startDualTurn(speakerLang) {
       recognizedTextBuffer = currentText;
       const inputEl = document.getElementById('source-text');
       if (inputEl) inputEl.value = currentText;
+      updateMonitorUI('listening', '말씀 감지됨! 👂', `인식 중: "${currentText}"`);
     }
 
     // 최종 결과가 나왔을 때 즉시 번역
@@ -601,11 +626,14 @@ function startDualTurn(speakerLang) {
     console.warn('Dual STT Error:', err);
     if (err.error === 'not-allowed' || err.error === 'service-not-allowed') {
       showToast('⚠️ 마이크 사용 권한을 허용해 주세요!');
+      updateMonitorUI('idle', '⚠️ 마이크 권한 차단됨', '브라우저 주소창 왼쪽 자물쇠 아이콘을 눌러 [마이크 허용]을 켜주세요.');
       stopDualTurn(false);
     } else if (err.error === 'no-speech') {
       // 아무 말도 하지 않음
     } else if (!hasExecutedTranslation && recognizedTextBuffer.trim()) {
       triggerTranslation(recognizedTextBuffer);
+    } else {
+      updateMonitorUI('idle', '마이크 연결 대기', '음성을 감지하지 못했습니다. 버튼을 누르고 다시 말씀해 보세요.');
     }
   };
 
@@ -614,9 +642,8 @@ function startDualTurn(speakerLang) {
     if (!hasExecutedTranslation && recognizedTextBuffer.trim()) {
       triggerTranslation(recognizedTextBuffer);
     } else if (!hasExecutedTranslation) {
-      // 아무 말도 안 하고 꺼졌을 때: 오뚝이 소리 무한 루프를 돌지 않고 대기 상태로 종료
       stopDualTurn(false);
-      showToast('음성을 감지하지 못했습니다. 버튼을 누르고 다시 말씀해 주세요.');
+      updateMonitorUI('idle', '대기 상태', '음성을 듣지 못했습니다. 버튼을 누르고 편하게 다시 말씀해 주세요.');
     }
   };
 
@@ -625,6 +652,7 @@ function startDualTurn(speakerLang) {
   } catch (e) {
     console.warn('SpeechRecognition start error:', e);
     stopDualTurn(false);
+    updateMonitorUI('idle', '⚠️ 마이크 시작 실패', '브라우저 마이크를 다시 확인해 주세요.');
   }
 }
 
@@ -1770,8 +1798,21 @@ function setupEventListeners() {
   if (dualStopBtn) {
     dualStopBtn.addEventListener('click', () => {
       stopDualTurn(true);
+      updateMonitorUI('idle', '대화 통역 중단됨', '버튼을 눌러 다시 시작할 수 있습니다.');
     });
   }
+
+  // 원클릭 현지 필수 표현 칩 이벤트
+  document.querySelectorAll('.instant-chip').forEach(chip => {
+    chip.addEventListener('click', async () => {
+      unlockAudio();
+      const speakMsg = chip.dataset.speak;
+      const inputEl = document.getElementById('source-text');
+      if (inputEl) inputEl.value = speakMsg;
+      updateMonitorUI('translating', '원클릭 번역 실행 중... ⏳', `선택: "${speakMsg}"`);
+      await performTranslation(false);
+    });
+  });
 
   // 실시간 음성(말하기) 통역 메인 버튼 이벤트
   const realtimeVoiceBtn = document.getElementById('realtime-voice-btn');

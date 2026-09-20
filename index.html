@@ -117,6 +117,28 @@
             <span id="dual-live-banner-text">한국어로 말씀하세요... (손 떼고 편하게 말씀하세요)</span>
             <button class="dual-stop-btn" id="dual-stop-btn">중단</button>
           </div>
+
+          <!-- 🎙️ 실시간 음성 진단 모니터 (스마트폰 상태 중계) -->
+          <div class="voice-live-monitor" id="voice-live-monitor">
+            <div class="vlm-header">
+              <span class="vlm-indicator" id="vlm-indicator">⚪ 대기</span>
+              <span class="vlm-status" id="vlm-status">마이크 대기 중입니다.</span>
+            </div>
+            <div class="vlm-text" id="vlm-text">위 버튼을 누르고 말씀하시면 여기에 실시간으로 텍스트가 찍힙니다.</div>
+          </div>
+
+          <!-- ⚡ 마이크 없이 바로 말하는 원클릭 필수 표현 칩 -->
+          <div class="instant-talk-section">
+            <span class="instant-talk-title">⚡ 원클릭 현지 말하기 (터치 즉시 일본어로 낭독):</span>
+            <div class="instant-talk-chips">
+              <button class="instant-chip" data-speak="이거 주세요">👉 이거 주세요</button>
+              <button class="instant-chip" data-speak="얼마예요?">💰 얼마예요?</button>
+              <button class="instant-chip" data-speak="와사비 빼주세요">🍣 와사비 빼주세요</button>
+              <button class="instant-chip" data-speak="계산해 주세요">🧾 계산해 주세요</button>
+              <button class="instant-chip" data-speak="화장실 어디예요?">🚻 화장실 어디예요?</button>
+              <button class="instant-chip" data-speak="감사합니다">🙏 감사합니다</button>
+            </div>
+          </div>
         </div>
 
         <!-- 번역 입력 카드 (직접 입력도 가능) -->
