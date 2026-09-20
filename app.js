@@ -1994,18 +1994,12 @@ function startVoiceTurn(speakerLang) {
     };
 
     rec.onresult = (event) => {
-      let interim = '';
-      let finalTranscript = '';
-
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
-        } else {
-          interim += event.results[i][0].transcript;
-        }
+      let fullTranscript = '';
+      for (let i = 0; i < event.results.length; ++i) {
+        fullTranscript += event.results[i][0].transcript;
       }
 
-      const currentSpoken = (finalTranscript || interim).trim();
+      const currentSpoken = fullTranscript.trim();
       if (currentSpoken) {
         voiceTurnBuffer = currentSpoken;
         if (streamText) streamText.innerText = `🗣️ "${currentSpoken}"`;
@@ -2110,115 +2104,149 @@ async function triggerVoiceTranslate(text, fromLang) {
   let translated = '';
   let rawRomaji = '';
 
-  // 1차: MyMemory 번역 (브라우저 CORS 100% 정상 통과)
   try {
-    const mUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${fromLang}|${toLang}`;
-    const mResp = await fetch(mUrl);
-    if (mResp.ok) {
-      const mData = await mResp.json();
-      if (mData && mData.responseData && mData.responseData.translatedText) {
-        translated = mData.responseData.translatedText;
-      }
-    }
-  } catch (mErr) {
-    console.warn('MyMemory API error:', mErr);
-  }
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
-  // 2차 백업: Chrome / Google API
-  if (!translated) {
-    try {
-      const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${fromLang}&tl=${toLang}&dt=t&dt=rm&q=${encodeURIComponent(text)}`;
-      const resp = await fetch(gUrl);
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data && data[0]) {
-          translated = data[0].filter(it => it[0]).map(it => it[0]).join('');
-        }
-      }
-    } catch (gErr) {
-      console.warn('Google single API error:', gErr);
-    }
-  }
-
-  // 3차: Google single 백업 (로마자 발음 추출용)
-  if (toLang === 'ja') {
-    try {
-      const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${fromLang}&tl=${toLang}&dt=t&dt=rm&q=${encodeURIComponent(text)}`;
-      const resp = await fetch(gUrl);
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data && data[0]) {
-          if (!translated) {
-            translated = data[0].filter(it => it[0]).map(it => it[0]).join('');
+    // 1순위: 로컬호스트 전용 프록시 (CORS 및 구글 봇 차단 100% 우회)
+    if (isLocalhost) {
+      try {
+        const localUrl = `/api/translate?q=${encodeURIComponent(text)}&sl=${fromLang}&tl=${toLang}`;
+        const lResp = await fetch(localUrl);
+        if (lResp.ok) {
+          const lData = await lResp.json();
+          if (lData && lData.translated && lData.translated.trim() && lData.translated !== '?????') {
+            translated = lData.translated.trim();
+            if (lData.pron) rawRomaji = lData.pron;
           }
-          for (let k = 0; k < data[0].length; k++) {
-            const seg = data[0][k];
-            if (seg && seg.length > 2 && typeof seg[2] === 'string' && seg[2].trim()) {
-              rawRomaji = seg[2];
-            } else if (seg && seg.length > 3 && typeof seg[3] === 'string' && seg[3].trim()) {
-              rawRomaji = seg[3];
+        }
+      } catch (localErr) {
+        console.warn('Local proxy error, falling back:', localErr);
+      }
+    }
+
+    // 2순위: Google Chrome 공식 확장 API (clients5 - 브라우저 차단 없음, 초고속)
+    if (!translated) {
+      try {
+        const cUrl = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=${fromLang}&tl=${toLang}&q=${encodeURIComponent(text)}`;
+        const cResp = await fetch(cUrl);
+        if (cResp.ok) {
+          const cData = await cResp.json();
+          if (Array.isArray(cData) && cData.length > 0 && typeof cData[0] === 'string') {
+            translated = cData[0].trim();
+          } else if (typeof cData === 'string') {
+            translated = cData.trim();
+          }
+        }
+      } catch (cErr) {
+        console.warn('Clients5 API error, trying backup:', cErr);
+      }
+    }
+
+    // 3순위: MyMemory 번역 (브라우저 CORS 100% 지원)
+    if (!translated) {
+      try {
+        const mUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${fromLang}|${toLang}`;
+        const mResp = await fetch(mUrl);
+        if (mResp.ok) {
+          const mData = await mResp.json();
+          if (mData && mData.responseData && mData.responseData.translatedText) {
+            const mText = mData.responseData.translatedText.trim();
+            // 할당량 경고문 제외
+            if (!mText.startsWith('MYMEMORY WARNING') && !mText.includes('FREE TRANSLATIONS')) {
+              translated = mText;
             }
           }
         }
+      } catch (mErr) {
+        console.warn('MyMemory API error:', mErr);
       }
-    } catch (err) {
-      console.warn('Google single API error:', err);
     }
-  }
 
-  if (streamBox) streamBox.style.display = 'none';
-  isTranslatingVoiceTurn = false;
-
-  if (!translated) {
-    showToast('⚠️ 번역 서버 연결 지연. 다시 말씀해 주세요.');
-    return;
-  }
-
-  // 한국어 ➔ 일본어인 경우 한글 발음 표기 생성
-  let pron = '';
-  if (toLang === 'ja') {
-    pron = convertToKoreanPronunciation(translated, rawRomaji);
-  }
-
-  lastOriginalText = text;
-  lastTranslatedText = translated;
-  lastTranslatedLang = toLang;
-  lastPronunciationText = pron;
-
-  // 화면 표시 업데이트
-  if (resultBadge) {
-    resultBadge.innerText = toLang === 'ja' ? '🇯🇵 일본어 번역 & 낭독' : '🇰🇷 한국어 번역 & 낭독';
-    resultBadge.style.color = toLang === 'ja' ? '#E11D48' : '#2563EB';
-  }
-
-  if (resOriginal) {
-    const speakerPrefix = fromLang === 'ko' ? '🇰🇷 나 (한국어)' : '🇯🇵 일본인 상대방';
-    resOriginal.innerText = `${speakerPrefix}: "${text}"`;
-  }
-
-  if (resJapanese) {
-    resJapanese.innerText = translated;
-  }
-
-  if (resReading) {
-    if (pron && toLang === 'ja') {
-      resReading.innerText = `🗣️ [발음] ${pron}`;
-      resReading.style.display = 'inline-block';
-    } else {
-      resReading.style.display = 'none';
+    // 4순위: Google gtx (로마자 발음 및 비상 번역)
+    if (!translated || (toLang === 'ja' && !rawRomaji)) {
+      try {
+        const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${fromLang}&tl=${toLang}&dt=t&dt=rm&q=${encodeURIComponent(text)}`;
+        const gResp = await fetch(gUrl);
+        if (gResp.ok) {
+          const gData = await gResp.json();
+          if (gData && gData[0]) {
+            if (!translated) {
+              translated = gData[0].filter(it => it[0]).map(it => it[0]).join('').trim();
+            }
+            for (let k = 0; k < gData[0].length; k++) {
+              const seg = gData[0][k];
+              if (seg && seg.length > 2 && typeof seg[2] === 'string' && seg[2].trim()) {
+                rawRomaji = seg[2];
+              } else if (seg && seg.length > 3 && typeof seg[3] === 'string' && seg[3].trim()) {
+                rawRomaji = seg[3];
+              }
+            }
+          }
+        }
+      } catch (gErr) {
+        console.warn('Google single gtx error:', gErr);
+      }
     }
+
+    if (!translated) {
+      showToast('⚠️ 번역 서버 연결 지연. 다시 말씀해 주세요.');
+      return;
+    }
+
+    // 한국어 ➔ 일본어인 경우 한글 발음 표기 생성
+    let pron = '';
+    if (toLang === 'ja') {
+      pron = convertToKoreanPronunciation(translated, rawRomaji);
+    }
+
+    lastOriginalText = text;
+    lastTranslatedText = translated;
+    lastTranslatedLang = toLang;
+    lastPronunciationText = pron;
+
+    // 화면 표시 업데이트
+    if (resultBadge) {
+      resultBadge.innerText = toLang === 'ja' ? '🇯🇵 일본어 번역 & 낭독' : '🇰🇷 한국어 번역 & 낭독';
+      resultBadge.style.color = toLang === 'ja' ? '#E11D48' : '#2563EB';
+    }
+
+    if (resOriginal) {
+      const speakerPrefix = fromLang === 'ko' ? '🇰🇷 나 (한국어)' : '🇯🇵 일본인 상대방';
+      resOriginal.innerText = `${speakerPrefix}: "${text}"`;
+    }
+
+    if (resJapanese) {
+      resJapanese.innerText = translated;
+    }
+
+    if (resReading) {
+      if (pron && toLang === 'ja') {
+        resReading.innerText = `🗣️ [발음] ${pron}`;
+        resReading.style.display = 'inline-block';
+      } else {
+        resReading.style.display = 'none';
+      }
+    }
+
+    if (resultBox) {
+      resultBox.style.display = 'block';
+      resultBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // 즉시 해당 언어(일본어 or 한국어) 원어민 음성으로 읽어주기!
+    speakText(translated, toLang);
+
+    // 기록 저장
+    addHistoryItem(text, translated, fromLang, toLang);
+
+  } catch (outerErr) {
+    console.error('triggerVoiceTranslate error:', outerErr);
+    showToast('⚠️ 번역 중 오류가 발생했습니다. 다시 시도해 주세요.');
+  } finally {
+    // 🛡️ 어떤 에러가 발생해도 락을 100% 해제하여 영구 먹통 방지
+    isTranslatingVoiceTurn = false;
+    if (streamBox) streamBox.style.display = 'none';
   }
-
-  if (resultBox) {
-    resultBox.style.display = 'block';
-    resultBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }
-
-  // 즉시 해당 언어(일본어 or 한국어) 원어민 음성으로 읽어주기!
-  speakText(translated, toLang);
-
-  // 기록 저장
-  addHistoryItem(text, translated, fromLang, toLang);
 }
 
 function handlePapagoAppLaunch(e) {
@@ -2242,6 +2270,7 @@ function handlePapagoAppLaunch(e) {
     }, 1500);
     return;
   }
+}
 
 // ==========================================
 // 5. 사진 촬영 글자 해석(OCR) & 여행자 상세 설명 엔진
