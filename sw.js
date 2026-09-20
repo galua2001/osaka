@@ -1,5 +1,5 @@
 // OsakaGo PWA Service Worker
-const CACHE_NAME = 'osakago-v4.4';
+const CACHE_NAME = 'osakago-v4.5';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',

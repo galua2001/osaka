@@ -2317,125 +2317,189 @@ async function processPhotoFile(file) {
 
   unlockAudio();
 
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    const dataUrl = e.target.result;
-    if (previewImg) previewImg.src = dataUrl;
-    if (previewBox) previewBox.style.display = 'flex';
+  // 1. 즉시 사진 미리보기 표시 & 분석 프로그레스 시작 (사용자 지연 체감 제로화)
+  let objectUrl = null;
+  try {
+    objectUrl = URL.createObjectURL(file);
+    if (previewImg) previewImg.src = objectUrl;
+  } catch(e) {
+    const reader = new FileReader();
+    reader.onload = (re) => { if (previewImg) previewImg.src = re.target.result; };
+    reader.readAsDataURL(file);
+  }
 
-    if (progressBox) progressBox.style.display = 'block';
-    if (resultBox) resultBox.style.display = 'none';
+  if (previewBox) previewBox.style.display = 'flex';
+  if (progressBox) progressBox.style.display = 'block';
+  if (resultBox) resultBox.style.display = 'none';
 
-    function updateProgress(msg, pct) {
-      if (progressText) progressText.innerText = msg;
-      if (progressPercent) progressPercent.innerText = `${pct}%`;
-      if (progressFill) progressFill.style.width = `${pct}%`;
+  // 사용자가 분석 중임을 바로 볼 수 있게 프로그레스 영역으로 부드럽게 스크롤
+  progressBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  function updateProgress(msg, pct) {
+    if (progressText) progressText.innerText = msg;
+    if (progressPercent) progressPercent.innerText = `${pct}%`;
+    if (progressFill) progressFill.style.width = `${pct}%`;
+  }
+
+  updateProgress('📸 사진을 불러왔습니다! 글자 분석 준비 중... ⏳', 15);
+
+  try {
+    // 2. 이미지 로드 및 모바일 최적화 다운스케일링 (최대 800px로 가볍고 빠르게)
+    const img = new Image();
+    const loadPromise = new Promise((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error('이미지 로딩 실패'));
+    });
+    img.src = objectUrl || previewImg.src;
+
+    // 이미지 로딩 4초 타임아웃
+    await Promise.race([
+      loadPromise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('이미지 디코딩 시간 초과')), 4000))
+    ]);
+
+    const maxDim = 800;
+    let w = img.width || 800;
+    let h = img.height || 600;
+    if (w > maxDim || h > maxDim) {
+      if (w > h) {
+        h = Math.round((h * maxDim) / w);
+        w = maxDim;
+      } else {
+        w = Math.round((w * maxDim) / h);
+        h = maxDim;
+      }
     }
 
-    updateProgress('이미지 전처리 및 OCR 준비 중... ⏳', 15);
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, w, h);
 
+    // 흑백 및 대비 보정 (메뉴판 글자 인식률 대폭 향상)
     try {
-      const img = new Image();
-      img.src = dataUrl;
-      await new Promise((res, rej) => {
-        img.onload = res;
-        img.onerror = rej;
-      });
-
-      const maxDim = 1200;
-      let w = img.width;
-      let h = img.height;
-      if (w > maxDim || h > maxDim) {
-        if (w > h) {
-          h = Math.round((h * maxDim) / w);
-          w = maxDim;
-        } else {
-          w = Math.round((w * maxDim) / h);
-          h = maxDim;
-        }
+      const imgData = ctx.getImageData(0, 0, w, h);
+      const d = imgData.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+        const enhanced = Math.min(255, Math.max(0, (gray - 128) * 1.25 + 128));
+        d[i] = enhanced;
+        d[i + 1] = enhanced;
+        d[i + 2] = enhanced;
       }
+      ctx.putImageData(imgData, 0, 0);
+    } catch(e) {
+      console.warn('Canvas filter pass');
+    }
 
-      const canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, w, h);
+    updateProgress('일본어 고속 엔진 가동 중... 🤖', 35);
 
-      updateProgress('Tesseract 일본어 엔진 가동 중... 🤖', 30);
+    // 3. Tesseract 고속 OCR 엔진 실행 (1.5MB 초경량 fast 모델 & 12초 타임아웃)
+    if (typeof Tesseract === 'undefined') {
+      throw new Error('TESSERACT_NOT_LOADED');
+    }
 
-      if (typeof Tesseract === 'undefined') {
-        throw new Error('Tesseract OCR 엔진을 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');
-      }
-
-      const worker = await Tesseract.createWorker('jpn+eng', 1, {
+    const ocrPromise = (async () => {
+      const worker = await Tesseract.createWorker('jpn', 1, {
+        langPath: 'https://cdn.jsdelivr.net/gh/naptha/tessdata@gh-pages/4.0.0_fast',
         logger: m => {
           if (m.status === 'recognizing text') {
-            const p = Math.min(95, Math.round(35 + (m.progress || 0) * 60));
-            updateProgress(`글자 분석 및 추출 중... (${p}%)`, p);
+            const p = Math.min(92, Math.round(40 + (m.progress || 0) * 52));
+            updateProgress(`글자 판독 및 추출 중... (${p}%)`, p);
           }
         }
       });
-
       const ret = await worker.recognize(canvas);
       await worker.terminate();
+      return ret.data && ret.data.text ? ret.data.text.trim() : '';
+    })();
 
-      const recognizedText = (ret.data && ret.data.text ? ret.data.text.trim() : '');
+    const recognizedText = await Promise.race([
+      ocrPromise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('OCR_TIMEOUT')), 12000))
+    ]);
 
-      if (!recognizedText || recognizedText.length < 2) {
-        if (progressBox) progressBox.style.display = 'none';
-        showToast('사진에서 명확한 글자를 찾지 못했습니다. 더 가깝고 밝게 다시 찍어주세요.');
-        if (resultBox) {
-          resultBox.style.display = 'block';
-          if (resOriginal) resOriginal.innerText = '(인식된 글자가 없습니다)';
-          if (resTranslated) resTranslated.innerText = '사진을 더 선명하고 가깝게 다시 촬영해 보시거나, 아래 직접 입력창에 단어를 넣어보세요.';
-          if (resExplanation) resExplanation.innerHTML = generateTravelExplanation('', '');
-        }
-        return;
-      }
-
-      updateProgress('한국어로 번역 및 꿀팁 분석 중... ✨', 95);
-
-      let translatedText = '';
-      try {
-        const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=ja&tl=ko&dt=t&q=${encodeURIComponent(recognizedText)}`;
-        const resp = await fetch(gUrl);
-        if (resp.ok) {
-          const data = await resp.json();
-          if (data && data[0]) {
-            translatedText = data[0].filter(it => it[0]).map(it => it[0]).join('');
-          }
-        }
-      } catch (err) {
-        console.warn('Translate error:', err);
-      }
-
-      if (!translatedText) {
-        translatedText = '번역 서버 연결 지연 (원문 일본어를 확인해 주세요)';
-      }
-
-      const explanationHtml = generateTravelExplanation(recognizedText, translatedText);
-
-      lastPhotoOriginalJa = recognizedText;
-      lastPhotoTranslatedKo = translatedText;
-
+    if (!recognizedText || recognizedText.length < 2) {
       if (progressBox) progressBox.style.display = 'none';
       if (resultBox) {
         resultBox.style.display = 'block';
-        if (resOriginal) resOriginal.innerText = recognizedText;
-        if (resTranslated) resTranslated.innerText = translatedText;
-        if (resExplanation) resExplanation.innerHTML = explanationHtml;
+        if (resOriginal) resOriginal.innerText = '(글자가 또렷하지 않거나 감지되지 않았습니다)';
+        if (resTranslated) {
+          resTranslated.innerHTML = `
+            <div style="line-height: 1.6;">
+              💡 <strong>사진을 더 가깝고 밝게 다시 찍어보세요!</strong><br>
+              • 실시간으로 메뉴판을 번역하고 싶다면 상단의 <strong>[🔍 구글 렌즈 실시간 번역]</strong>을 누르시면 카메라 화면 전체가 즉시 한국어로 바뀝니다.<br>
+              • 아래의 <strong>[메뉴판 핵심 단어 칩]</strong>을 터치하시면 주요 일본어 표현을 즉시 확인하실 수 있습니다.
+            </div>
+          `;
+        }
+        if (resExplanation) resExplanation.innerHTML = generateTravelExplanation('', '');
         resultBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
-
-      showToast('🎉 사진 글자 해석 및 설명이 완료되었습니다!');
-
-    } catch (err) {
-      console.error('OCR error:', err);
-      if (progressBox) progressBox.style.display = 'none';
-      showToast('⚠️ 글자 분석 중 오류가 발생했습니다. 다시 시도해 주세요.');
+      return;
     }
-  };
-  reader.readAsDataURL(file);
+
+    updateProgress('한국어로 번역 및 꿀팁 분석 중... ✨', 95);
+
+    // 4. 추출된 일본어 ➔ 한국어 번역
+    let translatedText = '';
+    try {
+      const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=ja&tl=ko&dt=t&q=${encodeURIComponent(recognizedText)}`;
+      const resp = await fetch(gUrl);
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data && data[0]) {
+          translatedText = data[0].filter(it => it[0]).map(it => it[0]).join('');
+        }
+      }
+    } catch (err) {
+      console.warn('Translate error:', err);
+    }
+
+    if (!translatedText) {
+      translatedText = '번역 서버 연결 지연 (위 일본어 원문을 확인해 주세요)';
+    }
+
+    const explanationHtml = generateTravelExplanation(recognizedText, translatedText);
+
+    lastPhotoOriginalJa = recognizedText;
+    lastPhotoTranslatedKo = translatedText;
+
+    if (progressBox) progressBox.style.display = 'none';
+    if (resultBox) {
+      resultBox.style.display = 'block';
+      if (resOriginal) resOriginal.innerText = recognizedText;
+      if (resTranslated) resTranslated.innerText = translatedText;
+      if (resExplanation) resExplanation.innerHTML = explanationHtml;
+      resultBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    showToast('🎉 사진 글자 해석 및 설명이 완료되었습니다!');
+
+  } catch (err) {
+    console.error('Photo OCR error:', err);
+    if (progressBox) progressBox.style.display = 'none';
+
+    // 오류 발생 시에도 화면이 텅 비지 않고 사용자에게 즉각 대안 솔루션 표시!
+    if (resultBox) {
+      resultBox.style.display = 'block';
+      if (resOriginal) resOriginal.innerText = '(모바일 네트워크 지연으로 자동 분석 실패)';
+      if (resTranslated) {
+        resTranslated.innerHTML = `
+          <div style="line-height: 1.6; color: #1E3A8A;">
+            ⚡ <strong>가장 확실하고 빠른 실시간 번역 방법:</strong><br>
+            상단의 <strong>[🔍 구글 렌즈 실시간 번역]</strong>을 누르시면 카메라를 비추는 순간 메뉴판 전체가 실시간 한국어로 증강현실 번역됩니다!<br>
+            또는 아래의 <strong>[메뉴판 핵심 단어]</strong>를 터치하시면 0.1초 만에 상세 설명이 나옵니다.
+          </div>
+        `;
+      }
+      if (resExplanation) resExplanation.innerHTML = generateTravelExplanation('', '');
+      resultBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    showToast('⚠️ 실시간 렌즈 번역 또는 단어 검색을 이용해 보세요.');
+  }
 }
 
 async function executePhotoTextLookup(query) {
@@ -2545,21 +2609,34 @@ function setupEventListeners() {
   // 📸 사진 촬영 & 갤러리 글자 해석(OCR) 및 여행 설명 이벤트 리스너 바인딩
   const photoFileInput = document.getElementById('photo-file-input');
   if (photoFileInput) {
-    photoFileInput.addEventListener('change', (e) => {
+    photoFileInput.addEventListener('change', function(e) {
       if (e.target.files && e.target.files[0]) {
         processPhotoFile(e.target.files[0]);
       }
+      this.value = '';
     });
   }
 
   const galleryFileInput = document.getElementById('gallery-file-input');
   if (galleryFileInput) {
-    galleryFileInput.addEventListener('change', (e) => {
+    galleryFileInput.addEventListener('change', function(e) {
       if (e.target.files && e.target.files[0]) {
         processPhotoFile(e.target.files[0]);
       }
+      this.value = '';
     });
   }
+
+  // 메뉴판 핵심 단어 퀵 칩 터치 이벤트
+  document.querySelectorAll('.photo-quick-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const word = chip.dataset.word;
+      if (word) {
+        unlockAudio();
+        executePhotoTextLookup(word);
+      }
+    });
+  });
 
   const photoRetryBtn = document.getElementById('photo-retry-btn');
   if (photoRetryBtn) {
