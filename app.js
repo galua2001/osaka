@@ -471,13 +471,6 @@ function initVoices() {
 // 모바일 브라우저 오디오 언락 (Web Speech API + HTML5 Audio 완벽 해제)
 let audioUnlocker = null;
 function unlockAudio() {
-  if ('speechSynthesis' in window) {
-    try {
-      const u = new SpeechSynthesisUtterance(' ');
-      u.volume = 0.01;
-      window.speechSynthesis.speak(u);
-    } catch (e) {}
-  }
   try {
     if (!audioUnlocker) {
       audioUnlocker = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
@@ -1581,16 +1574,16 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
     return;
   }
 
-  // 🛡️ 발화 중복 원천 차단 (현재 말하고 있거나 2.5초 이내 동일 문장이면 발화 무시)
+  // 🛡️ 발화 중복 체크 (800ms 이내 초고속 연속 발화만 방지)
   const now = Date.now();
-  if (state.isSpeakingNow || (text === lastSpokenText && (now - lastSpokenTime) < 2500)) {
+  if (text === lastSpokenText && (now - lastSpokenTime) < 800) {
     if (onEndCallback) onEndCallback();
     return;
   }
   lastSpokenText = text;
   lastSpokenTime = now;
 
-  // 이전 오디오 및 발화 즉시 정지
+  // 이전 오디오 및 발화 즉시 강제 정지
   if (currentTtsAudio) {
     try {
       currentTtsAudio.pause();
@@ -1615,61 +1608,89 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
     }
   };
 
-  const safetyTimeout = setTimeout(finishSpeech, Math.max(2500, text.length * 300));
+  const safetyTimeout = setTimeout(finishSpeech, Math.max(3000, text.length * 350));
   state.isSpeakingNow = true;
-  showToast(lang === 'ja' ? '🔊 [일본어] 음성 안내 중...' : '🔊 [한국어] 음성 안내 중...');
+  showToast(lang === 'ja' ? '🔊 [일본어] 음성 낭독 중...' : '🔊 [한국어] 음성 낭독 중...');
 
-  // 1차 우선: 기기 내장 네이티브 음성 합성 (Chrome 이중 발화 버그 방지 규격)
+  const langCode = lang === 'ko' ? 'ko-KR' : 'ja-JP';
+
+  // 1차: 브라우저 내장 음성에 해당 언어 Voice가 확실히 존재하는지 확인
+  let nativeVoice = null;
   if ('speechSynthesis' in window) {
     try {
-      window.speechSynthesis.cancel(); // 큐 초기화
-
       if (!state.voices || state.voices.length === 0) {
         state.voices = window.speechSynthesis.getVoices() || [];
       }
-
-      const utterance = new SpeechSynthesisUtterance(text);
-      const langCode = lang === 'ko' ? 'ko-KR' : 'ja-JP';
-      utterance.lang = langCode;
-      utterance.rate = 0.95;
-      utterance.volume = 1.0;
-
-      const voice = (state.voices || []).find(v => v.lang === langCode || (v.lang && v.lang.replace('_', '-').startsWith(lang)));
-      if (voice) utterance.voice = voice;
-
-      utterance.onend = () => {
-        clearTimeout(safetyTimeout);
-        finishSpeech();
-      };
-
-      utterance.onerror = () => {
-        clearTimeout(safetyTimeout);
-        finishSpeech();
-      };
-
-      // 🛡️ Chrome Web Speech API 알려진 이중 발화 큐 버그 패치:
-      // cancel() 후 60ms 딜레이를 주어 브라우저 큐가 비워진 후 단 1회만 깨끗하게 speak 실행!
-      setTimeout(() => {
-        try {
-          window.speechSynthesis.speak(utterance);
-        } catch (spkErr) {
-          console.warn('speak error, trying fallback:', spkErr);
-          fallbackAudioStream();
-        }
-      }, 60);
-      return;
-    } catch (e) {
-      console.warn('SpeechSynthesis exception:', e);
-    }
+      nativeVoice = (state.voices || []).find(v => 
+        v.lang === langCode || 
+        v.lang.toLowerCase() === langCode.toLowerCase() ||
+        (v.lang && v.lang.replace('_', '-').toLowerCase().startsWith(lang.toLowerCase()))
+      );
+    } catch(e) {}
   }
 
-  // 2차 백업 (speechSynthesis가 아예 지원되지 않는 환경에서만 오디오 스트림 시도)
-  fallbackAudioStream();
+  // 🛡️ [핵심] 일본어 내장 음성이 없는 한국 안드로이드 스마트폰 또는 웹뷰 환경:
+  // 실패할 수밖에 없는 네이티브 합성을 즉시 패스하고 100% 확실한 원어민 Google Studio 오디오 스트림으로 직행!
+  if (!nativeVoice) {
+    playFallbackAudio();
+    return;
+  }
 
-  function fallbackAudioStream() {
+  // 내장 음성이 확인된 경우: SpeechSynthesis 실행
+  try {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = langCode;
+    utterance.rate = 0.95;
+    utterance.volume = 1.0;
+    utterance.voice = nativeVoice;
+
+    let hasStarted = false;
+    utterance.onstart = () => {
+      hasStarted = true;
+    };
+
+    utterance.onend = () => {
+      clearTimeout(safetyTimeout);
+      finishSpeech();
+    };
+
+    utterance.onerror = (spkErr) => {
+      console.warn('SpeechSynthesis error, switching to fallback audio:', spkErr);
+      clearTimeout(safetyTimeout);
+      playFallbackAudio();
+    };
+
+    window.speechSynthesis.speak(utterance);
+
+    // 🛡️ 800ms 동안 onstart가 안 뜨면(브라우저가 묵묵부답으로 큐를 먹었을 때) 즉시 오디오 스트림으로 자동 전환
+    setTimeout(() => {
+      if (!hasStarted && state.isSpeakingNow) {
+        try { window.speechSynthesis.cancel(); } catch(e) {}
+        clearTimeout(safetyTimeout);
+        playFallbackAudio();
+      }
+    }, 800);
+
+  } catch(e) {
+    console.warn('SpeechSynthesis exception, fallback to audio stream:', e);
+    clearTimeout(safetyTimeout);
+    playFallbackAudio();
+  }
+
+  function playFallbackAudio() {
     try {
-      const gTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(text)}`;
-      const audio = new Audio(gTtsUrl);
+      if (currentTtsAudio) {
+        try { currentTtsAudio.pause(); } catch(e) {}
+        currentTtsAudio = null;
+      }
+
+      const encoded = encodeURIComponent(text);
+      const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(lang)}&q=${encoded}`;
+      
+      const audio = new Audio();
+      audio.referrerPolicy = 'no-referrer';
+      audio.crossOrigin = 'anonymous';
+      audio.src = ttsUrl;
       currentTtsAudio = audio;
 
       audio.onended = () => {
@@ -1677,19 +1698,22 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
         finishSpeech();
       };
 
-      audio.onerror = () => {
+      audio.onerror = (err) => {
+        console.warn('Audio stream error:', err);
         clearTimeout(safetyTimeout);
         finishSpeech();
       };
 
       const p = audio.play();
       if (p !== undefined) {
-        p.catch(() => {
+        p.catch((playErr) => {
+          console.warn('Audio autoplay blocked by browser:', playErr);
           clearTimeout(safetyTimeout);
           finishSpeech();
         });
       }
-    } catch (err) {
+    } catch(err) {
+      console.error('playFallbackAudio failed:', err);
       clearTimeout(safetyTimeout);
       finishSpeech();
     }
@@ -1943,6 +1967,40 @@ function toggleVoiceSpeaker(speakerLang) {
   }
 }
 
+// 🛡️ 연속/중복 인식된 단어 및 어구 자동 압축 필터 (5번 반복되는 현상 원천 박멸)
+function cleanRepeatedPhrases(text) {
+  if (!text) return '';
+  let str = text.trim();
+
+  // 1) 연속으로 똑같이 반복된 단어 압축 ("얼마예요 얼마예요 얼마예요" -> "얼마예요")
+  const tokens = str.split(/\s+/);
+  const dedupTokens = [];
+  for (let i = 0; i < tokens.length; i++) {
+    if (i === 0 || tokens[i] !== tokens[i - 1]) {
+      dedupTokens.push(tokens[i]);
+    }
+  }
+  str = dedupTokens.join(' ');
+
+  // 2) 2개 이상의 단어로 이루어진 반복 구절 압축 (예: "화장실 어디예요 화장실 어디예요")
+  for (let phraseLen = 10; phraseLen >= 2; phraseLen--) {
+    const pTokens = str.split(/\s+/);
+    if (pTokens.length >= phraseLen * 2) {
+      for (let i = 0; i <= pTokens.length - phraseLen * 2; i++) {
+        const chunk1 = pTokens.slice(i, i + phraseLen).join(' ');
+        const chunk2 = pTokens.slice(i + phraseLen, i + phraseLen * 2).join(' ');
+        if (chunk1 === chunk2) {
+          pTokens.splice(i + phraseLen, phraseLen);
+          str = pTokens.join(' ');
+          break;
+        }
+      }
+    }
+  }
+
+  return str.trim();
+}
+
 function startVoiceTurn(speakerLang) {
   if (isSessionProcessing) return;
 
@@ -2012,7 +2070,7 @@ function startVoiceTurn(speakerLang) {
     const rec = new SpeechRecognition();
     voiceTurnRec = rec;
     rec.lang = speakerLang === 'ko' ? 'ko-KR' : 'ja-JP';
-    rec.continuous = true;
+    rec.continuous = false; // 🛡️ 단일 발화 모드: 여러 문장이 무한 누적되어 5번 반복되는 현상 원천 차단!
     rec.interimResults = true;
 
     rec.onstart = () => {};
@@ -2021,21 +2079,34 @@ function startVoiceTurn(speakerLang) {
       // 🛡️ 세션이 이미 커밋되었거나 닫혔으면 잔여 패킷 즉시 폐기
       if (isSessionProcessing || !activeVoiceSpeaker) return;
 
-      let fullTranscript = '';
+      let transcript = '';
+      let isFinalResult = false;
       for (let i = 0; i < event.results.length; ++i) {
-        fullTranscript += event.results[i][0].transcript;
+        transcript += event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          isFinalResult = true;
+        }
       }
 
-      const currentSpoken = fullTranscript.trim();
-      if (currentSpoken) {
-        voiceTurnBuffer = currentSpoken;
-        if (streamText) streamText.innerText = `🗣️ "${currentSpoken}"`;
+      // 🛡️ 중복 단어/어구 자동 압축 필터 통과
+      const cleanSpoken = cleanRepeatedPhrases(transcript);
+      if (cleanSpoken) {
+        voiceTurnBuffer = cleanSpoken;
+        if (streamText) streamText.innerText = `🗣️ "${cleanSpoken}"`;
 
-        // ⏱️ 묵음 감지 타이머: 1200ms간 말이 멈추면 자동으로 커밋 (단 1회만!)
         if (voiceSilenceTimer) clearTimeout(voiceSilenceTimer);
-        voiceSilenceTimer = setTimeout(() => {
-          commitVoiceTurn();
-        }, 1200);
+
+        if (isFinalResult) {
+          // 브라우저가 발화 종료를 확정함 -> 300ms 후 단 1회만 확정 번역 커밋!
+          voiceSilenceTimer = setTimeout(() => {
+            commitVoiceTurn();
+          }, 300);
+        } else {
+          // 말하는 중간 잠깐 쉬는 구간 -> 1000ms 묵음 감지 시 커밋
+          voiceSilenceTimer = setTimeout(() => {
+            commitVoiceTurn();
+          }, 1000);
+        }
       }
     };
 
@@ -2733,6 +2804,8 @@ function setupEventListeners() {
     voiceRespeakBtn.addEventListener('click', () => {
       if (lastTranslatedText) {
         unlockAudio();
+        state.isSpeakingNow = false;
+        lastSpokenText = ''; // 🛡️ 누를 때마다 즉시 100% 강제 재생
         speakText(lastTranslatedText, lastTranslatedLang);
       } else {
         showToast('먼저 말씀해주세요.');
