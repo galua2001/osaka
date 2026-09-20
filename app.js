@@ -1581,9 +1581,9 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
     return;
   }
 
-  // 🛡️ 동일 문장 1.5초 내 중복 낭독 원천 차단 (두 번씩 나오는 현상 박멸)
+  // 🛡️ 발화 중복 원천 차단 (현재 말하고 있거나 2.5초 이내 동일 문장이면 발화 무시)
   const now = Date.now();
-  if (text === lastSpokenText && (now - lastSpokenTime) < 1500) {
+  if (state.isSpeakingNow || (text === lastSpokenText && (now - lastSpokenTime) < 2500)) {
     if (onEndCallback) onEndCallback();
     return;
   }
@@ -1615,17 +1615,14 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
     }
   };
 
-  const safetyTimeout = setTimeout(finishSpeech, Math.max(3000, text.length * 350));
+  const safetyTimeout = setTimeout(finishSpeech, Math.max(2500, text.length * 300));
   state.isSpeakingNow = true;
   showToast(lang === 'ja' ? '🔊 [일본어] 음성 안내 중...' : '🔊 [한국어] 음성 안내 중...');
 
-  // 1차 우선: 기기 내장 네이티브 음성 합성 (딜레이 0초, 100% 모바일 사운드 보장)
+  // 1차 우선: 기기 내장 네이티브 음성 합성 (Chrome 이중 발화 버그 방지 규격)
   if ('speechSynthesis' in window) {
     try {
-      if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
-      }
-      window.speechSynthesis.cancel();
+      window.speechSynthesis.cancel(); // 큐 초기화
 
       if (!state.voices || state.voices.length === 0) {
         state.voices = window.speechSynthesis.getVoices() || [];
@@ -1645,17 +1642,21 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
         finishSpeech();
       };
 
-      utterance.onerror = (e) => {
-        // 취소/인터럽트 에러는 정상 중단이므로 fallback 오디오 실행 금지!
+      utterance.onerror = () => {
         clearTimeout(safetyTimeout);
         finishSpeech();
       };
 
-      window.speechSynthesis.speak(utterance);
-      // iOS Safari 대응: speak 직후 강제 resume 호출
-      if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
-      }
+      // 🛡️ Chrome Web Speech API 알려진 이중 발화 큐 버그 패치:
+      // cancel() 후 60ms 딜레이를 주어 브라우저 큐가 비워진 후 단 1회만 깨끗하게 speak 실행!
+      setTimeout(() => {
+        try {
+          window.speechSynthesis.speak(utterance);
+        } catch (spkErr) {
+          console.warn('speak error, trying fallback:', spkErr);
+          fallbackAudioStream();
+        }
+      }, 60);
       return;
     } catch (e) {
       console.warn('SpeechSynthesis exception:', e);
