@@ -1574,7 +1574,7 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
     return;
   }
 
-  // 🛡️ 발화 중복 체크 (800ms 이내 초고속 연속 발화만 방지)
+  // 🛡️ 800ms 이내 동일 문장 초고속 연타만 방지
   const now = Date.now();
   if (text === lastSpokenText && (now - lastSpokenTime) < 800) {
     if (onEndCallback) onEndCallback();
@@ -1583,16 +1583,13 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
   lastSpokenText = text;
   lastSpokenTime = now;
 
-  // 이전 오디오 및 발화 즉시 강제 정지
+  // 이전 오디오/발화 즉시 강제 정지
   if (currentTtsAudio) {
-    try {
-      currentTtsAudio.pause();
-      currentTtsAudio.currentTime = 0;
-    } catch (e) {}
+    try { currentTtsAudio.pause(); currentTtsAudio.currentTime = 0; } catch(e) {}
     currentTtsAudio = null;
   }
   if ('speechSynthesis' in window) {
-    try { window.speechSynthesis.cancel(); } catch (e) {}
+    try { window.speechSynthesis.cancel(); } catch(e) {}
   }
 
   let callbackFired = false;
@@ -1608,112 +1605,73 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
     }
   };
 
-  const safetyTimeout = setTimeout(finishSpeech, Math.max(3000, text.length * 350));
+  const safetyTimeout = setTimeout(finishSpeech, Math.max(4000, text.length * 400));
   state.isSpeakingNow = true;
   showToast(lang === 'ja' ? '🔊 [일본어] 음성 낭독 중...' : '🔊 [한국어] 음성 낭독 중...');
 
-  const langCode = lang === 'ko' ? 'ko-KR' : 'ja-JP';
-
-  // 1차: 브라우저 내장 음성에 해당 언어 Voice가 확실히 존재하는지 확인
-  let nativeVoice = null;
-  if ('speechSynthesis' in window) {
-    try {
-      if (!state.voices || state.voices.length === 0) {
-        state.voices = window.speechSynthesis.getVoices() || [];
-      }
-      nativeVoice = (state.voices || []).find(v => 
-        v.lang === langCode || 
-        v.lang.toLowerCase() === langCode.toLowerCase() ||
-        (v.lang && v.lang.replace('_', '-').toLowerCase().startsWith(lang.toLowerCase()))
-      );
-    } catch(e) {}
-  }
-
-  // 🛡️ [핵심] 일본어 내장 음성이 없는 한국 안드로이드 스마트폰 또는 웹뷰 환경:
-  // 실패할 수밖에 없는 네이티브 합성을 즉시 패스하고 100% 확실한 원어민 Google Studio 오디오 스트림으로 직행!
-  if (!nativeVoice) {
-    playFallbackAudio();
-    return;
-  }
-
-  // 내장 음성이 확인된 경우: SpeechSynthesis 실행
+  // 🎯 [전략 전환] 항상 구글 TTS 오디오 스트림을 1차로 사용!
+  // 모바일에서 SpeechSynthesis보다 100배 안정적이고, 원어민 발음 음질도 우수함.
+  // ❌ crossOrigin 절대 설정하지 말 것! (구글 서버가 CORS 안 보내서 오디오 차단됨)
   try {
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = langCode;
-    utterance.rate = 0.95;
-    utterance.volume = 1.0;
-    utterance.voice = nativeVoice;
+    const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(text)}`;
+    const audio = new Audio(ttsUrl);
+    currentTtsAudio = audio;
 
-    let hasStarted = false;
-    utterance.onstart = () => {
-      hasStarted = true;
-    };
-
-    utterance.onend = () => {
+    audio.onended = () => {
       clearTimeout(safetyTimeout);
       finishSpeech();
     };
 
-    utterance.onerror = (spkErr) => {
-      console.warn('SpeechSynthesis error, switching to fallback audio:', spkErr);
-      clearTimeout(safetyTimeout);
-      playFallbackAudio();
+    audio.onerror = () => {
+      console.warn('Google TTS audio failed, trying SpeechSynthesis fallback...');
+      currentTtsAudio = null;
+      trySpeechSynthesisFallback();
     };
 
-    window.speechSynthesis.speak(utterance);
-
-    // 🛡️ 800ms 동안 onstart가 안 뜨면(브라우저가 묵묵부답으로 큐를 먹었을 때) 즉시 오디오 스트림으로 자동 전환
-    setTimeout(() => {
-      if (!hasStarted && state.isSpeakingNow) {
-        try { window.speechSynthesis.cancel(); } catch(e) {}
-        clearTimeout(safetyTimeout);
-        playFallbackAudio();
-      }
-    }, 800);
-
-  } catch(e) {
-    console.warn('SpeechSynthesis exception, fallback to audio stream:', e);
-    clearTimeout(safetyTimeout);
-    playFallbackAudio();
+    const p = audio.play();
+    if (p !== undefined) {
+      p.catch(() => {
+        console.warn('Google TTS autoplay blocked, trying SpeechSynthesis fallback...');
+        currentTtsAudio = null;
+        trySpeechSynthesisFallback();
+      });
+    }
+  } catch(err) {
+    console.warn('Google TTS Audio() failed:', err);
+    trySpeechSynthesisFallback();
   }
 
-  function playFallbackAudio() {
+  // 2차 백업: 구글 TTS가 실패한 경우에만 내장 음성 합성 시도
+  function trySpeechSynthesisFallback() {
+    if (callbackFired) return;
+    if (!('speechSynthesis' in window)) {
+      clearTimeout(safetyTimeout);
+      finishSpeech();
+      return;
+    }
+
     try {
-      if (currentTtsAudio) {
-        try { currentTtsAudio.pause(); } catch(e) {}
-        currentTtsAudio = null;
+      if (!state.voices || state.voices.length === 0) {
+        state.voices = window.speechSynthesis.getVoices() || [];
       }
 
-      const encoded = encodeURIComponent(text);
-      const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(lang)}&q=${encoded}`;
-      
-      const audio = new Audio();
-      audio.referrerPolicy = 'no-referrer';
-      audio.crossOrigin = 'anonymous';
-      audio.src = ttsUrl;
-      currentTtsAudio = audio;
+      const langCode = lang === 'ko' ? 'ko-KR' : 'ja-JP';
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = langCode;
+      utterance.rate = 0.95;
+      utterance.volume = 1.0;
 
-      audio.onended = () => {
-        clearTimeout(safetyTimeout);
-        finishSpeech();
-      };
+      const voice = (state.voices || []).find(v =>
+        v.lang === langCode ||
+        (v.lang && v.lang.replace('_', '-').toLowerCase().startsWith(lang.toLowerCase()))
+      );
+      if (voice) utterance.voice = voice;
 
-      audio.onerror = (err) => {
-        console.warn('Audio stream error:', err);
-        clearTimeout(safetyTimeout);
-        finishSpeech();
-      };
+      utterance.onend = () => { clearTimeout(safetyTimeout); finishSpeech(); };
+      utterance.onerror = () => { clearTimeout(safetyTimeout); finishSpeech(); };
 
-      const p = audio.play();
-      if (p !== undefined) {
-        p.catch((playErr) => {
-          console.warn('Audio autoplay blocked by browser:', playErr);
-          clearTimeout(safetyTimeout);
-          finishSpeech();
-        });
-      }
-    } catch(err) {
-      console.error('playFallbackAudio failed:', err);
+      window.speechSynthesis.speak(utterance);
+    } catch(e) {
       clearTimeout(safetyTimeout);
       finishSpeech();
     }
