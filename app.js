@@ -469,10 +469,12 @@ function initVoices() {
 
 // ==========================================
 // 모바일 브라우저 오디오 언락 (Web Speech API + HTML5 Audio 완벽 해제)
+// 전역 TTS 오디오 객체: 매번 new Audio()를 하면 비동기 콜백에서 모바일 Autoplay에 막히므로, 
+// 전역으로 하나만 만들고 사용자 터치 시점에 unlock해야 함.
 let audioUnlocker = null;
+let globalTtsAudio = null;
+
 function unlockAudio() {
-  // 🛡️ [필수] 모바일 브라우저 SpeechSynthesis 언락: 사용자 터치 시점에 빈 발화를 한 번 실행해야
-  // 이후 비동기로 호출되는 speechSynthesis.speak()가 차단되지 않음!
   if ('speechSynthesis' in window) {
     try {
       const u = new SpeechSynthesisUtterance(' ');
@@ -485,6 +487,13 @@ function unlockAudio() {
       audioUnlocker = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
     }
     audioUnlocker.play().then(() => { audioUnlocker.pause(); }).catch(() => {});
+    
+    // 🛡️ 구글 TTS 오디오 객체 미리 언락
+    if (!globalTtsAudio) {
+      globalTtsAudio = new Audio();
+    }
+    globalTtsAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+    globalTtsAudio.play().then(() => { globalTtsAudio.pause(); }).catch(() => {});
   } catch (e) {}
 }
 
@@ -1668,15 +1677,26 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
     if (callbackFired) return;
     try {
       const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(text)}`;
-      const audio = new Audio(ttsUrl);
+      
+      // 🛡️ 모바일 Autoplay 정책 우회를 위해 사용자 터치로 언락된 전역 오디오 객체 사용!
+      let audio = globalTtsAudio;
+      if (!audio) {
+        audio = new Audio();
+      }
+      
       currentTtsAudio = audio;
+      audio.src = ttsUrl;
 
       audio.onended = () => { clearTimeout(safetyTimeout); finishSpeech(); };
       audio.onerror = () => { clearTimeout(safetyTimeout); finishSpeech(); };
 
       const p = audio.play();
       if (p !== undefined) {
-        p.catch(() => { clearTimeout(safetyTimeout); finishSpeech(); });
+        p.catch((e) => { 
+          console.warn('Google TTS Backup blocked by browser:', e);
+          clearTimeout(safetyTimeout); 
+          finishSpeech(); 
+        });
       }
     } catch(e) {
       clearTimeout(safetyTimeout);
