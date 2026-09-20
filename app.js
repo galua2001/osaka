@@ -1607,35 +1607,39 @@ function speakText(text, lang = 'ja', onEndCallback = null) {
   state.isSpeakingNow = true;
   showToast(lang === 'ja' ? '🔊 [일본어] 음성 낭독 중...' : '🔊 [한국어] 음성 낭독 중...');
 
-  // 무조건 100% 확실한 구글 스튜디오 오디오 스트림(HTML5 Audio DOM) 사용
-  // SpeechSynthesis는 기기마다 편차가 너무 심하고 큐가 꼬이는 버그가 많아 안드로이드에서 퇴출.
-  try {
-    // 🚨 Google TTS IP 차단(429/403) 우회를 위해 translate.googleapis.com 및 client=gtx 엔드포인트로 전면 교체!
-    const ttsUrl = `https://translate.googleapis.com/translate_tts?ie=UTF-8&client=gtx&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(text)}`;
-    const player = document.getElementById('global-tts-player');
-    
-    if (player) {
-      player.pause();
-      player.currentTime = 0;
-      player.referrerPolicy = 'no-referrer'; // 🚨 구글 404 에러 방지 필수!
-      player.src = ttsUrl;
+  // 1차 가장 확실한 내장 SpeechSynthesis 엔진 (예전 5.8버전에서 소리가 나던 바로 그 방식!)
+  if ('speechSynthesis' in window) {
+    try {
+      window.speechSynthesis.cancel();
       
-      player.onended = () => { clearTimeout(safetyTimeout); finishSpeech(); };
-      player.onerror = () => { clearTimeout(safetyTimeout); finishSpeech(); };
-      
-      const p = player.play();
-      if (p !== undefined) {
-        p.catch(() => {
-          clearTimeout(safetyTimeout);
-          finishSpeech();
-        });
+      const utterance = new SpeechSynthesisUtterance(text);
+      const langCode = lang === 'ko' ? 'ko-KR' : 'ja-JP';
+      utterance.lang = langCode;
+      utterance.rate = 0.95;
+      utterance.volume = 1.0;
+
+      // 안드로이드 삼성폰 등에서는 getVoices()에 일본어가 안 보일 수 있지만
+      // utterance.lang만 설정해주면 자체적으로 알아서 읽어줌!
+      if (state.voices && state.voices.length > 0) {
+        const voice = state.voices.find(v => v.lang.replace('_', '-').toLowerCase().startsWith(lang.toLowerCase()));
+        if (voice) utterance.voice = voice;
       }
-    } else {
-      clearTimeout(safetyTimeout);
+
+      utterance.onend = () => { clearTimeout(safetyTimeout); finishSpeech(); };
+      utterance.onerror = () => { clearTimeout(safetyTimeout); finishSpeech(); };
+
+      setTimeout(() => {
+        try {
+          window.speechSynthesis.speak(utterance);
+        } catch(e) {
+          finishSpeech();
+        }
+      }, 60);
+      return;
+    } catch(e) {
       finishSpeech();
     }
-  } catch(e) {
-    clearTimeout(safetyTimeout);
+  } else {
     finishSpeech();
   }
 }
