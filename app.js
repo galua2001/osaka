@@ -2203,9 +2203,278 @@ function handlePapagoAppLaunch(e) {
     return;
   }
 
-  // PC 브라우저 환경에서는 파파고 웹사이트 새 창 열기
-  e.preventDefault();
-  window.open('https://papago.naver.com/?sk=ko&tk=ja', '_blank');
+// ==========================================
+// 5. 사진 촬영 글자 해석(OCR) & 여행자 상세 설명 엔진
+// ==========================================
+let lastPhotoOriginalJa = '';
+let lastPhotoTranslatedKo = '';
+
+const japaneseKnowledgeBase = [
+  // 라멘 & 면 요리
+  { keywords: ['替玉', 'かえだま', '替え玉'], title: '替玉 (카에다마 - 면 추가)', desc: '면을 다 드신 후 남은 국물에 면만 추가하는 주문입니다. 면을 추가하려면 국물을 다 마시지 말고 반드시 남겨두셔야 합니다!' },
+  { keywords: ['豚骨', 'とんこつ', 'トンコツ'], title: '豚骨 (돈코츠 - 돼지뼈 육수)', desc: '돼지 뼈를 센 불에서 장시간 푹 고아내어 뽀얗고 깊은 감칠맛을 내는 일본의 대표적인 라멘 국물입니다.' },
+  { keywords: ['醤油', 'しょうゆ', 'ショウユ'], title: '醤油 (쇼유 - 간장 베이스)', desc: '맑고 깔끔한 일본 전통 간장으로 간을 맞춘 담백하고 개운한 국물입니다.' },
+  { keywords: ['味噌', 'みそ', 'ミソ'], title: '味噌 (미소 - 된장 베이스)', desc: '일본 전통 된장으로 구수하고 진한 풍미를 낸 국물입니다.' },
+  { keywords: ['つけ麺', 'つけめん', 'つけメン'], title: 'つけ麺 (츠케멘 - 찍어먹는 면)', desc: '삶은 면을 진하고 따뜻한 농축 육수에 한 입씩 푹 적셔 찍어 먹는 면 요리입니다.' },
+  { keywords: ['味玉', '半熟卵', 'あじたま'], title: '味玉 (아지타마 - 반숙 양념 달걀)', desc: '노른자가 부드럽게 흐르는 반숙란을 간장 양념에 재워 라멘에 올리는 인기 토핑입니다.' },
+  { keywords: ['チャーシュー', '叉焼'], title: 'チャーシュー (차슈 - 돼지고기 편육)', desc: '돼지고기 덩어리를 특제 간장 양념에 부드럽게 삶거나 구운 대표적인 라멘 고기 토핑입니다.' },
+  { keywords: ['メンマ', '麺麻'], title: 'メンマ (멘마 - 죽순 절임)', desc: '죽순을 발효시켜 짭조름하게 조린 라멘의 아삭한 고명입니다.' },
+  { keywords: ['かたさ', '硬さ', 'かため', 'ばりかた'], title: '麺の硬さ (면 익힘 정도)', desc: '카타메(단단하게), 후츠우(보통), 야와라카메(부드럽게) 중 면 익힘 정도를 고를 수 있습니다.' },
+
+  // 이자카야 & 식당 문화
+  { keywords: ['お通し', '席料', 'テーブルチャージ'], title: 'お通し / 席料 (오토시 / 자릿세)', desc: '일본 술집(이자카야)에 앉으면 주문하지 않아도 나오는 기본 안주 및 자릿세입니다. 1인당 보통 300~500엔이 영수증에 합산 청구되는 정상적인 일본 식문화입니다.' },
+  { keywords: ['税込', '税込み'], title: '税込 (제이코미 - 세금 포함)', desc: '일본 소비세 10%가 이미 포함된 최종 결제 금액입니다. 적힌 금액 그대로 지불하시면 됩니다.' },
+  { keywords: ['税抜', '税別', '本体価格'], title: '税抜 (제이누키 - 세금 별도)', desc: '소비세 10%가 제외된 금액입니다. 계산서에는 적힌 가격에 10% 세금이 추가 청구됩니다.' },
+  { keywords: ['おすすめ', 'オススメ', 'お勧め'], title: 'おすすめ (오스스메 - 추천 메뉴)', desc: '이 식당에서 가장 자신 있게 추천하는 인기 간판 메뉴입니다.' },
+  { keywords: ['限定', '数量限定', '期間限定'], title: '限定 (겐테이 - 한정 판매)', desc: '하루 정해진 수량만 팔거나 특정 계절에만 맛볼 수 있는 특별 한정 메뉴입니다.' },
+  { keywords: ['食べ放題', 'バイキング'], title: '食べ放題 (타베호다이 - 무제한 식사)', desc: '정해진 시간(보통 90분~120분) 동안 메뉴판의 음식을 무제한으로 주문해 먹을 수 있는 뷔페 시스템입니다.' },
+  { keywords: ['飲み放題'], title: '飲み放題 (노미호다이 - 무제한 주류/음료)', desc: '정해진 시간 동안 맥주, 사와, 사케, 하이볼, 소프트드링크를 무제한으로 주문할 수 있는 시스템입니다.' },
+  { keywords: ['大盛り', '大盛'], title: '大盛り (오오모리 - 곱빼기)', desc: '밥이나 면의 양을 기본보다 넉넉하게 많이 주는 옵션입니다.' },
+  { keywords: ['特盛'], title: '特盛 (토쿠모리 - 특대 사이즈)', desc: '오오모리보다 더 많은 특대 곱빼기 사이즈입니다.' },
+  { keywords: ['並盛', '普通'], title: '並盛 (나미모리 - 기본 보통 사이즈)', desc: '일반적인 표준 1인분 양입니다.' },
+  { keywords: ['小盛り', '少なめ'], title: '小盛り (코모리 - 작은 양)', desc: '밥이나 면의 양을 보통보다 적게 주는 옵션입니다.' },
+  { keywords: ['定食', 'セット'], title: '定食 (테이쇼쿠 - 정식 세트)', desc: '메인 요리와 함께 밥, 미소된장국, 츠케모노(절임반찬)가 한 상으로 나오는 세트 식사입니다.' },
+  { keywords: ['丼', 'どんぶり'], title: '丼 (돈부리 - 덮밥 요리)', desc: '큰 그릇에 밥을 담고 위에 고기, 해산물, 튀김 등의 재료를 얹어낸 일본식 덮밥입니다.' },
+
+  // 오사카 대표 명물 요리
+  { keywords: ['串カツ', '串かつ'], title: '串カツ (쿠시카츠 - 오사카 꼬치튀김)', desc: '고기, 해산물, 야채를 꼬치에 꿰어 바삭하게 튀긴 오사카 신세카이 명물입니다. ※ 테이블의 공용 소스는 위생상 [한 번만 찍기(두 번 찍기 절대 금지)] 룰이 있습니다.' },
+  { keywords: ['たこ焼き', 'たこやき'], title: 'たこ焼き (타코야키 - 문어 풀빵)', desc: '오사카의 소울푸드로 큼직한 문어가 들어간 둥근 구이입니다. 겉은 바삭하고 속은 매우 뜨거운 크림 상태이니 입천장 데지 않게 조심하세요!' },
+  { keywords: ['お好み焼き', 'おこのみやき'], title: 'お好み焼き (오코노미야키 - 철판 빈대떡)', desc: '양배추 반죽에 돼지고기, 오징어 등을 넣어 철판에 노릇하게 구운 뒤 데리야키 소스, 마요네즈, 가쓰오부시를 얹어 먹는 오사카 대표 철판 요리입니다.' },
+  { keywords: ['牛カツ', '牛かつ'], title: '牛カツ (규카츠 - 소고기 튀김)', desc: '신선한 소고기에 얇은 튀김옷을 입혀 미디엄 레어로 살짝 튀겨낸 요리입니다. 테이블 위 미니 개인 화로에 원하는 굽기로 살짝 구워 와사비, 소금과 곁들여 드세요.' },
+  { keywords: ['すき焼き'], title: 'すき焼き (스키야키 - 소고기 전골)', desc: '얇게 썬 고급 소고기와 야채를 달콤짭조름한 간장 베이스 육수에 자작하게 조린 후 날달걀을 풀어 찍어 먹는 일본 전통 요리입니다.' },
+  { keywords: ['しゃぶしゃぶ'], title: 'しゃぶしゃぶ (샤브샤브)', desc: '끓는 육수에 얇은 고기와 채소를 살짝 흔들어 익힌 뒤 상큼한 폰즈 소스나 고소한 참깨 소스에 찍어 먹는 요리입니다.' },
+  { keywords: ['うどん'], title: 'うどん (우동 - 일본식 가락국수)', desc: '쫄깃한 면발과 깔끔한 다시마/가쓰오부시 육수가 일품인 오사카 명물 면 요리입니다.' },
+  { keywords: ['そば', '蕎麦'], title: 'そば (소바 - 메밀국수)', desc: '메밀가루로 만든 면 요리로, 시원한 쯔유에 적셔 먹는 자루소바 또는 따뜻한 온소바로 즐깁니다.' },
+  { keywords: ['天ぷら', '天婦羅'], title: '天ぷら (덴푸라 - 일본식 튀김)', desc: '신선한 새우, 생선, 야채에 얇고 바삭한 튀김옷을 입혀 깨끗한 기름에 튀겨낸 요리입니다.' },
+  { keywords: ['刺身', 'お造り'], title: '刺身 / お造り (사시미 - 생선회)', desc: '신선한 제철 생선을 얇게 썰어 간장과 와사비에 찍어 먹는 전통 요리입니다.' },
+  { keywords: ['生ビール', '生中'], title: '生ビール (나마비루 - 생맥주)', desc: '식당이나 이자카야에서 주문하는 시원한 갓 따른 생맥주입니다. 보통 중간 크기 잔은 [나마츄]라고 부릅니다.' },
+  { keywords: ['ハイボール'], title: 'ハイボール (하이볼 - 위스키 탄산수)', desc: '위스키에 탄산수와 레몬을 섞은 상쾌하고 시원한 일본 대표 대중 주류입니다.' },
+  { keywords: ['サワー'], title: 'サワー (사와 - 과즙 탄산주)', desc: '일본 소주나 보드카에 레몬, 자몽 등의 과즙과 탄산수를 섞어 달콤하게 마시는 과일주입니다.' },
+
+  // 주문 옵션 & 팁
+  { keywords: ['ネギ抜き', 'ねぎ抜き'], title: 'ネギ抜き (네기누키 - 파 빼기)', desc: '요리에서 파(대파/실파)를 빼달라는 요청입니다.' },
+  { keywords: ['わさ비抜き', 'ワサビ抜き', 'わさび抜き'], title: 'わさび抜き (와사비누키 - 와사비 빼기)', desc: '스시나 음식에서 와사비(고추냉이)를 빼달라는 요청입니다.' },
+  { keywords: ['氷なし'], title: '氷なし (코오리나시 - 얼음 빼기)', desc: '음료나 물에서 얼음을 빼달라는 요청입니다.' },
+
+  // 계산 & 결제 & 안내
+  { keywords: ['現金のみ', '現金払い'], title: '現金のみ (겐킨노미 - 현금만 가능 ⚠️)', desc: '신용카드나 모바일 페이가 불가능하고 오직 엔화 현금으로만 결제할 수 있는 매장입니다. 현금을 준비하세요!' },
+  { keywords: ['クレジットカード', 'カード可'], title: 'クレジットカード (신용카드 결제 가능)', desc: 'VISA, MASTER 등 해외 신용카드로 결제가 가능한 매장입니다.' },
+  { keywords: ['別々', '個別会計'], title: '別々 (베츠베츠 - 각자 계산)', desc: '일행과 계산서를 나누어 각자 먹은 것을 따로따로 계산하는 방식입니다.' },
+  { keywords: ['免税', 'TAX FREE', 'TaxFree'], title: '免税 (면세 - TAX FREE)', desc: '외국인 관광객 여권을 제시하면 세금(10%)을 즉시 환급받을 수 있습니다. 동일 매장 당일 5,000엔 이상(세금 제외) 구매 시 적용됩니다.' },
+  { keywords: ['禁煙'], title: '禁煙 (킨엔 - 금연석 / 금연 매장)', desc: '전자담배를 포함하여 실내 흡연이 전면 금지된 구역입니다.' },
+  { keywords: ['喫煙'], title: '喫煙 (키츠엔 - 흡연 가능 구역)', desc: '지정된 흡연실 또는 흡연이 허용된 좌석/매장입니다.' },
+  { keywords: ['満席'], title: '満席 (만세키 - 만석)', desc: '현재 매장 좌석이 꽉 찬 상태입니다. 입구의 대기 명부(이름, 인원수)를 작성하고 대기하셔야 합니다.' },
+  { keywords: ['準備中'], title: '準備中 (준비추 - 영업 준비 중 / 브레이크 타임)', desc: '현재 영업시간이 아니거나 오후 브레이크 타임 중입니다.' }
+];
+
+function generateTravelExplanation(jaText, koText) {
+  const matched = [];
+  const lowerJa = (jaText || '').toLowerCase();
+  const lowerKo = (koText || '').toLowerCase();
+
+  for (const item of japaneseKnowledgeBase) {
+    for (const kw of item.keywords) {
+      if (lowerJa.includes(kw.toLowerCase()) || lowerKo.includes(kw.toLowerCase())) {
+        if (!matched.some(m => m.title === item.title)) {
+          matched.push(item);
+        }
+        break;
+      }
+    }
+  }
+
+  if (matched.length > 0) {
+    let html = '<ul style="margin: 4px 0 0; padding-left: 18px;">';
+    matched.forEach(item => {
+      html += `<li style="margin-bottom: 6px;"><strong>📌 ${escapeHtml(item.title)}</strong><br>${escapeHtml(item.desc)}</li>`;
+    });
+    html += '</ul>';
+    return html;
+  }
+
+  return `
+    <div style="font-size: 11.5px; color: #78350F; line-height: 1.5;">
+      💡 <strong>여행자 안내</strong>: 위 텍스트는 사진에서 감지된 일본어 내용입니다.<br>
+      • 식당 주문 시 <strong>[🔊 일본어 발음 듣기]</strong>를 눌러 점원에게 들려주거나, 화면을 직접 보여주시면 편리합니다.<br>
+      • 더 궁금한 특정 단어(예: 替玉, お通し, 税込, 豚骨)는 아래 직접 입력창에 넣어보세요!
+    </div>
+  `;
+}
+
+async function processPhotoFile(file) {
+  if (!file) return;
+
+  const previewBox = document.getElementById('photo-preview-box');
+  const previewImg = document.getElementById('photo-preview-img');
+  const progressBox = document.getElementById('photo-progress-box');
+  const progressText = document.getElementById('photo-progress-text');
+  const progressPercent = document.getElementById('photo-progress-percent');
+  const progressFill = document.getElementById('photo-progress-fill');
+  const resultBox = document.getElementById('photo-result-box');
+  const resOriginal = document.getElementById('photo-res-original');
+  const resTranslated = document.getElementById('photo-res-translated');
+  const resExplanation = document.getElementById('photo-res-explanation');
+
+  unlockAudio();
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const dataUrl = e.target.result;
+    if (previewImg) previewImg.src = dataUrl;
+    if (previewBox) previewBox.style.display = 'flex';
+
+    if (progressBox) progressBox.style.display = 'block';
+    if (resultBox) resultBox.style.display = 'none';
+
+    function updateProgress(msg, pct) {
+      if (progressText) progressText.innerText = msg;
+      if (progressPercent) progressPercent.innerText = `${pct}%`;
+      if (progressFill) progressFill.style.width = `${pct}%`;
+    }
+
+    updateProgress('이미지 전처리 및 OCR 준비 중... ⏳', 15);
+
+    try {
+      const img = new Image();
+      img.src = dataUrl;
+      await new Promise((res, rej) => {
+        img.onload = res;
+        img.onerror = rej;
+      });
+
+      const maxDim = 1200;
+      let w = img.width;
+      let h = img.height;
+      if (w > maxDim || h > maxDim) {
+        if (w > h) {
+          h = Math.round((h * maxDim) / w);
+          w = maxDim;
+        } else {
+          w = Math.round((w * maxDim) / h);
+          h = maxDim;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+
+      updateProgress('Tesseract 일본어 엔진 가동 중... 🤖', 30);
+
+      if (typeof Tesseract === 'undefined') {
+        throw new Error('Tesseract OCR 엔진을 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');
+      }
+
+      const worker = await Tesseract.createWorker('jpn+eng', 1, {
+        logger: m => {
+          if (m.status === 'recognizing text') {
+            const p = Math.min(95, Math.round(35 + (m.progress || 0) * 60));
+            updateProgress(`글자 분석 및 추출 중... (${p}%)`, p);
+          }
+        }
+      });
+
+      const ret = await worker.recognize(canvas);
+      await worker.terminate();
+
+      const recognizedText = (ret.data && ret.data.text ? ret.data.text.trim() : '');
+
+      if (!recognizedText || recognizedText.length < 2) {
+        if (progressBox) progressBox.style.display = 'none';
+        showToast('사진에서 명확한 글자를 찾지 못했습니다. 더 가깝고 밝게 다시 찍어주세요.');
+        if (resultBox) {
+          resultBox.style.display = 'block';
+          if (resOriginal) resOriginal.innerText = '(인식된 글자가 없습니다)';
+          if (resTranslated) resTranslated.innerText = '사진을 더 선명하고 가깝게 다시 촬영해 보시거나, 아래 직접 입력창에 단어를 넣어보세요.';
+          if (resExplanation) resExplanation.innerHTML = generateTravelExplanation('', '');
+        }
+        return;
+      }
+
+      updateProgress('한국어로 번역 및 꿀팁 분석 중... ✨', 95);
+
+      let translatedText = '';
+      try {
+        const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=ja&tl=ko&dt=t&q=${encodeURIComponent(recognizedText)}`;
+        const resp = await fetch(gUrl);
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data && data[0]) {
+            translatedText = data[0].filter(it => it[0]).map(it => it[0]).join('');
+          }
+        }
+      } catch (err) {
+        console.warn('Translate error:', err);
+      }
+
+      if (!translatedText) {
+        translatedText = '번역 서버 연결 지연 (원문 일본어를 확인해 주세요)';
+      }
+
+      const explanationHtml = generateTravelExplanation(recognizedText, translatedText);
+
+      lastPhotoOriginalJa = recognizedText;
+      lastPhotoTranslatedKo = translatedText;
+
+      if (progressBox) progressBox.style.display = 'none';
+      if (resultBox) {
+        resultBox.style.display = 'block';
+        if (resOriginal) resOriginal.innerText = recognizedText;
+        if (resTranslated) resTranslated.innerText = translatedText;
+        if (resExplanation) resExplanation.innerHTML = explanationHtml;
+        resultBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+
+      showToast('🎉 사진 글자 해석 및 설명이 완료되었습니다!');
+
+    } catch (err) {
+      console.error('OCR error:', err);
+      if (progressBox) progressBox.style.display = 'none';
+      showToast('⚠️ 글자 분석 중 오류가 발생했습니다. 다시 시도해 주세요.');
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+async function executePhotoTextLookup(query) {
+  if (!query || !query.trim()) return;
+  const clean = query.trim();
+
+  const resultBox = document.getElementById('photo-result-box');
+  const resOriginal = document.getElementById('photo-res-original');
+  const resTranslated = document.getElementById('photo-res-translated');
+  const resExplanation = document.getElementById('photo-res-explanation');
+
+  showToast('⏳ 단어 해석 및 설명 조회 중...');
+
+  let translated = '';
+  try {
+    const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ko&dt=t&q=${encodeURIComponent(clean)}`;
+    const resp = await fetch(gUrl);
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data && data[0]) {
+        translated = data[0].filter(it => it[0]).map(it => it[0]).join('');
+      }
+    }
+  } catch (e) {}
+
+  if (!translated) translated = clean;
+
+  const explHtml = generateTravelExplanation(clean, translated);
+
+  lastPhotoOriginalJa = clean;
+  lastPhotoTranslatedKo = translated;
+
+  if (resultBox) {
+    resultBox.style.display = 'block';
+    if (resOriginal) resOriginal.innerText = clean;
+    if (resTranslated) resTranslated.innerText = translated;
+    if (resExplanation) resExplanation.innerHTML = explHtml;
+    resultBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
 }
 
 function setupEventListeners() {
@@ -2273,16 +2542,98 @@ function setupEventListeners() {
     });
   }
 
-  // ⚡ 원클릭 현지 필수 표현 칩 (터치 즉시 일본어 번역 & 음성 재생)
-  document.querySelectorAll('.voice-instant-chip').forEach(chip => {
-    chip.addEventListener('click', () => {
-      const phrase = chip.dataset.text;
-      if (phrase) {
-        unlockAudio();
-        triggerVoiceTranslate(phrase, 'ko');
+  // 📸 사진 촬영 & 갤러리 글자 해석(OCR) 및 여행 설명 이벤트 리스너 바인딩
+  const photoFileInput = document.getElementById('photo-file-input');
+  if (photoFileInput) {
+    photoFileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        processPhotoFile(e.target.files[0]);
       }
     });
-  });
+  }
+
+  const galleryFileInput = document.getElementById('gallery-file-input');
+  if (galleryFileInput) {
+    galleryFileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        processPhotoFile(e.target.files[0]);
+      }
+    });
+  }
+
+  const photoRetryBtn = document.getElementById('photo-retry-btn');
+  if (photoRetryBtn) {
+    photoRetryBtn.addEventListener('click', () => {
+      const fi = document.getElementById('photo-file-input');
+      if (fi) fi.click();
+    });
+  }
+
+  const photoLookupBtn = document.getElementById('photo-lookup-btn');
+  const photoLookupInput = document.getElementById('photo-lookup-input');
+  if (photoLookupBtn && photoLookupInput) {
+    photoLookupBtn.addEventListener('click', () => {
+      executePhotoTextLookup(photoLookupInput.value);
+    });
+    photoLookupInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        executePhotoTextLookup(photoLookupInput.value);
+      }
+    });
+  }
+
+  const photoSpeakBtn = document.getElementById('photo-speak-btn');
+  if (photoSpeakBtn) {
+    photoSpeakBtn.addEventListener('click', () => {
+      if (lastPhotoOriginalJa) {
+        unlockAudio();
+        speakText(lastPhotoOriginalJa, 'ja');
+      } else {
+        showToast('일본어 텍스트가 없습니다.');
+      }
+    });
+  }
+
+  const photoCopyBtn = document.getElementById('photo-copy-btn');
+  if (photoCopyBtn) {
+    photoCopyBtn.addEventListener('click', () => {
+      if (lastPhotoTranslatedKo) {
+        const textToCopy = `${lastPhotoOriginalJa}\n\n[한국어 번역]\n${lastPhotoTranslatedKo}`;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(textToCopy).then(() => {
+            showToast('📋 번역 내용이 복사되었습니다!');
+          }).catch(() => {
+            try {
+              const ta = document.createElement('textarea');
+              ta.value = textToCopy;
+              document.body.appendChild(ta);
+              ta.select();
+              document.execCommand('copy');
+              document.body.removeChild(ta);
+              showToast('📋 번역 내용이 복사되었습니다!');
+            } catch(e) {
+              prompt('번역 내용을 복사하세요:', textToCopy);
+            }
+          });
+        } else {
+          try {
+            const ta = document.createElement('textarea');
+            ta.value = textToCopy;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            showToast('📋 번역 내용이 복사되었습니다!');
+          } catch(e) {
+            prompt('번역 내용을 복사하세요:', textToCopy);
+          }
+        }
+      } else {
+        showToast('복사할 번역 내용이 없습니다.');
+      }
+    });
+  }
 
   // 🦜 파파고 공식 앱 열기 버튼 이벤트 리스너
   const papagoDirectBtn = document.getElementById('papago-direct-app-btn');

@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   
   <!-- 앱 스타일시트 -->
-  <link rel="stylesheet" href="style.css?v=4.3">
+  <link rel="stylesheet" href="style.css?v=4.4">
   <link rel="icon" href="icon-192.png">
 </head>
 <body>
@@ -127,19 +127,93 @@
             <div class="voice-res-japanese" id="voice-res-japanese"></div>
             <div class="voice-res-reading" id="voice-res-reading"></div>
           </div>
+        </div>
 
-          <!-- ⚡ 원클릭 현지 필수 표현 (터치 즉시 일본어로 낭독) -->
-          <div class="voice-instant-section">
-            <span class="voice-instant-title">⚡ 원클릭 필수 표현 (터치 즉시 일본어 소리 재생):</span>
-            <div class="voice-instant-grid">
-              <button class="voice-instant-chip" data-text="이거 얼마예요?">💰 얼마예요?</button>
-              <button class="voice-instant-chip" data-text="와사비 빼주세요">🍣 와사비 빼주세요</button>
-              <button class="voice-instant-chip" data-text="이거 하나 주세요">👉 이거 하나 주세요</button>
-              <button class="voice-instant-chip" data-text="계산해 주세요">🧾 계산해 주세요</button>
-              <button class="voice-instant-chip" data-text="화장실 어디예요?">🚻 화장실 어디예요?</button>
-              <button class="voice-instant-chip" data-text="카드 결제 되나요?">💳 카드 되나요?</button>
-              <button class="voice-instant-chip" data-text="생맥주 한 잔 주세요">🍺 생맥주 한 잔</button>
-              <button class="voice-instant-chip" data-text="감사합니다">🙏 감사합니다</button>
+        <!-- 📸 2. 사진 찍어서 글자 해석 & 상세 설명 카드 (메뉴판·간판·라벨) -->
+        <div class="photo-scan-card">
+          <div class="photo-card-header">
+            <span class="photo-badge">📸 사진 글자 해석 & 여행 설명</span>
+            <span class="photo-subinfo">메뉴판·간판·라벨 촬영 ➔ 번역 + 꿀팁 설명!</span>
+          </div>
+
+          <!-- 사진 촬영 & 갤러리 선택 버튼 -->
+          <div class="photo-action-buttons">
+            <label for="photo-file-input" class="photo-camera-btn">
+              <span style="font-size: 26px;">📷</span>
+              <div class="photo-btn-texts">
+                <span class="photo-btn-title">사진 찍기 (카메라 촬영)</span>
+                <span class="photo-btn-sub">일본어 메뉴판·간판 촬영 ➔ 글자 해석 & 설명</span>
+              </div>
+            </label>
+            <input type="file" id="photo-file-input" accept="image/*" capture="environment" style="display: none;">
+
+            <label for="gallery-file-input" class="photo-gallery-btn">
+              <span>🖼️ 갤러리 사진 선택</span>
+            </label>
+            <input type="file" id="gallery-file-input" accept="image/*" style="display: none;">
+          </div>
+
+          <!-- 분석 진행 상태 바 (기본 숨김) -->
+          <div class="photo-progress-box" id="photo-progress-box" style="display: none;">
+            <div class="photo-progress-header">
+              <span id="photo-progress-text">사진에서 일본어 글자를 분석 중입니다... ⏳</span>
+              <span id="photo-progress-percent">0%</span>
+            </div>
+            <div class="photo-progress-bar">
+              <div class="photo-progress-fill" id="photo-progress-fill" style="width: 0%;"></div>
+            </div>
+          </div>
+
+          <!-- 촬영/선택된 이미지 미리보기 (기본 숨김) -->
+          <div class="photo-preview-box" id="photo-preview-box" style="display: none;">
+            <img id="photo-preview-img" src="" alt="촬영된 사진">
+            <button class="photo-retry-btn" id="photo-retry-btn">🔄 다른 사진 찍기</button>
+          </div>
+
+          <!-- 사진 해석 결과 박스 (기본 숨김) -->
+          <div class="photo-result-box" id="photo-result-box" style="display: none;">
+            <!-- 1. 감지된 일본어 원문 -->
+            <div class="photo-res-section">
+              <div class="photo-section-title">🇯🇵 사진에서 읽은 일본어:</div>
+              <div class="photo-res-original" id="photo-res-original"></div>
+            </div>
+
+            <!-- 2. 한국어 번역 -->
+            <div class="photo-res-section">
+              <div class="photo-section-title">🇰🇷 한국어 번역:</div>
+              <div class="photo-res-translated" id="photo-res-translated"></div>
+            </div>
+
+            <!-- 3. AI 여행자 맞춤 꿀팁 & 상세 설명 -->
+            <div class="photo-res-section tip-box">
+              <div class="photo-section-title tip-title">💡 여행자 꿀팁 & 상세 설명:</div>
+              <div class="photo-res-explanation" id="photo-res-explanation"></div>
+            </div>
+
+            <div class="photo-result-actions">
+              <button class="voice-sub-btn" id="photo-speak-btn">🔊 일본어 발음 듣기</button>
+              <button class="voice-sub-btn" id="photo-copy-btn">📋 번역 복사</button>
+            </div>
+          </div>
+
+          <!-- 빠른 단어 직접 입력 해설 검색기 -->
+          <div class="photo-manual-lookup">
+            <div class="lookup-header">
+              <span>✏️ 사진 대신 글자를 직접 입력해서 설명받기:</span>
+            </div>
+            <div class="lookup-input-row">
+              <input type="text" id="photo-lookup-input" placeholder="일본어 단어 입력 (예: 替玉, お通し, 税込, 豚骨)" class="lookup-input">
+              <button id="photo-lookup-btn" class="lookup-btn">해석 & 설명</button>
+            </div>
+          </div>
+
+          <!-- 실시간 구글 렌즈 번역 링크 -->
+          <div class="photo-ext-links">
+            <span style="font-size: 11px; color: #64748B; font-weight: 700;">🌐 실시간 렌즈 카메라 바로가기:</span>
+            <div style="display: flex; gap: 6px; margin-top: 5px;">
+              <a href="https://translate.google.com/?sl=ja&tl=ko&op=images" target="_blank" class="photo-lens-link">
+                🔍 구글 렌즈 실시간 이미지 번역 ➔
+              </a>
             </div>
           </div>
         </div>
@@ -504,8 +578,10 @@
 
   <!-- Leaflet 지도 JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <!-- Tesseract.js (일본어 사진 OCR 엔진) -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" defer></script>
   <!-- 메인 앱 스크립트 연결 -->
-  <script src="app.js?v=4.3"></script>
+  <script src="app.js?v=4.4"></script>
 
   <!-- PWA 서비스 워커 및 앱 설치 제어 -->
   <script>
