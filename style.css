@@ -1799,3 +1799,87 @@ body {
   border-color: #2563EB;
   transform: scale(0.96);
 }
+
+/* 🦜 네이버 파파고 공식 연동 카드 */
+.papago-connect-card {
+  background: linear-gradient(135deg, rgba(3, 199, 90, 0.08) 0%, #FFFFFF 100%);
+  border: 1.5px solid rgba(3, 199, 90, 0.3);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  margin-top: 14px;
+  margin-bottom: 14px;
+}
+
+.papago-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.papago-badge {
+  background: #03C75A;
+  color: #FFFFFF;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 6px;
+}
+
+.papago-subinfo {
+  font-size: 11px;
+  color: #64748B;
+  font-weight: 600;
+}
+
+.papago-link-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #03C75A;
+  color: #FFFFFF;
+  text-decoration: none;
+  border-radius: 12px;
+  padding: 10px 14px;
+  box-shadow: 0 4px 12px rgba(3, 199, 90, 0.25);
+  transition: all 0.2s ease;
+}
+
+.papago-link-btn:active {
+  transform: scale(0.98);
+  background: #02b150;
+}
+
+.papago-btn-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.papago-logo {
+  font-size: 22px;
+}
+
+.papago-btn-texts {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.papago-main-text {
+  font-size: 13px;
+  font-weight: 800;
+  color: #FFFFFF;
+}
+
+.papago-hint-text {
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.88);
+  margin-top: 1px;
+}
+
+.papago-arrow {
+  font-size: 15px;
+  font-weight: 800;
+  color: #FFFFFF;
+}

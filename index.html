@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   
   <!-- 앱 스타일시트 -->
-  <link rel="stylesheet" href="style.css?v=3.0">
+  <link rel="stylesheet" href="style.css?v=3.1">
   <link rel="icon" href="icon-192.png">
 </head>
 <body>
@@ -216,6 +216,24 @@
               <span>현지인에게 크게 보여주기</span>
             </button>
           </div>
+        </div>
+
+        <!-- 🦜 네이버 파파고(Papago) 공식 앱/웹 원클릭 연동 카드 -->
+        <div class="papago-connect-card">
+          <div class="papago-card-header">
+            <span class="papago-badge">🦜 네이버 파파고 연동</span>
+            <span class="papago-subinfo">네이버 공식 엔진으로 바로 열기</span>
+          </div>
+          <a href="https://papago.naver.com/?sk=ko&tk=ja" target="_blank" rel="noopener noreferrer" class="papago-link-btn" id="papago-direct-btn" title="터치하면 네이버 파파고가 열립니다">
+            <div class="papago-btn-content">
+              <span class="papago-logo">🦜</span>
+              <div class="papago-btn-texts">
+                <span class="papago-main-text">네이버 파파고(Papago) 바로 열기</span>
+                <span class="papago-hint-text" id="papago-hint-text">위 입력창에 적힌 문장을 파파고로 그대로 보냅니다</span>
+              </div>
+            </div>
+            <span class="papago-arrow">➔</span>
+          </a>
         </div>
 
       </section>
@@ -541,7 +559,7 @@
   <!-- Leaflet 지도 JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <!-- 메인 앱 스크립트 연결 -->
-  <script src="app.js?v=3.0"></script>
+  <script src="app.js?v=3.1"></script>
 
   <!-- PWA 서비스 워커 및 앱 설치 제어 -->
   <script>

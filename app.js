@@ -1363,10 +1363,29 @@ function convertToKoreanPronunciation(japaneseText, rawRomaji) {
   return kanaToHangul(japaneseText);
 }
 
+// 네이버 파파고 공식 연동 링크 동적 동기화
+function updatePapagoLink(text) {
+  const papagoBtn = document.getElementById('papago-direct-btn');
+  const hintText = document.getElementById('papago-hint-text');
+  if (!papagoBtn) return;
+  const clean = (text || '').trim();
+  if (clean) {
+    const sl = state.sourceLang || 'ko';
+    const tl = state.targetLang || 'ja';
+    papagoBtn.href = `https://papago.naver.com/?sk=${sl}&tk=${tl}&st=${encodeURIComponent(clean)}`;
+    if (hintText) hintText.innerText = `"${clean.slice(0, 16)}${clean.length > 16 ? '...' : ''}" 파파고로 바로 번역하기 ➔`;
+  } else {
+    papagoBtn.href = 'https://papago.naver.com/?sk=ko&tk=ja';
+    if (hintText) hintText.innerText = '위 입력창에 적힌 문장을 파파고로 그대로 보냅니다';
+  }
+}
+
 // 실시간 번역 실행 (isLive: 실시간 타이핑 여부)
 async function performTranslation(isLive = false) {
   const inputEl = document.getElementById('source-text');
   const text = inputEl ? inputEl.value.trim() : '';
+
+  updatePapagoLink(text);
 
   if (!text) {
     if (!isLive) showToast('번역할 내용을 입력해주세요!');
@@ -1942,6 +1961,7 @@ function setupEventListeners() {
       if (state.liveDebounceTimer) clearTimeout(state.liveDebounceTimer);
 
       const val = sourceText.value.trim();
+      updatePapagoLink(val);
       if (!val) {
         const targetTextEl = document.getElementById('target-text');
         const pronounceBox = document.getElementById('pronounce-box');
