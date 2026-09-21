@@ -1,5 +1,5 @@
 /* ==========================================================================
-   OsakaGo - 오사카 여행 번역기 & 길찾기 지도 & 맛집 가이드 스타일시트
+   OsakaGo v10.1 - 오사카 여행 번역기 & 길찾기 지도 & 맛집 가이드 스타일시트
    ========================================================================== */
 
 :root {
@@ -3139,72 +3139,322 @@ body {
   background: #FED7AA;
 }
 
-/* AI 가이드 답변 결과 박스 */
+/* ==========================================================================
+   🏛️ 오사카 역사 & 문화 AI 가이드북 (글 중심 상세 매거진 & Q&A) v10.1
+   ========================================================================== */
+
+/* 피드 상단 헤더 바 */
+.culture-feed-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 18px;
+  margin-bottom: 12px;
+  padding: 0 4px;
+}
+
+.culture-feed-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.culture-feed-title-icon {
+  font-size: 16px;
+}
+
+.culture-feed-title {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #1E293B;
+  letter-spacing: -0.2px;
+}
+
+.culture-feed-count {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #EA580C;
+  background: #FFF7ED;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  border: 1px solid #FFEDD5;
+}
+
+.culture-clear-feed-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border-radius: 8px;
+  border: 1px solid #E2E8F0;
+  background: #F8FAFC;
+  color: #64748B;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.culture-clear-feed-btn:hover {
+  background: #FEE2E2;
+  border-color: #FECACA;
+  color: #DC2626;
+}
+
+/* Q&A 피드 스트림 컨테이너 */
+.culture-qa-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* 개별 Q&A 블록 (질문 카드 + 답변 카드의 1세트) */
+.culture-qa-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: cultureBlockIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  border-radius: 20px;
+}
+
+.culture-qa-block.highlight-new {
+  animation: cultureFlash 1.4s ease;
+}
+
+@keyframes cultureBlockIn {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes cultureFlash {
+  0% { box-shadow: 0 0 0 4px rgba(234, 88, 12, 0.4); }
+  100% { box-shadow: 0 0 0 0 rgba(234, 88, 12, 0); }
+}
+
+/* ================= 1. 내가 한 질문 카드 ([🙋 내가 한 질문: "○○○"]) ================= */
+.culture-user-q-card {
+  padding: 13px 16px;
+  background: linear-gradient(135deg, #EFF6FF 0%, #F8FAFC 100%);
+  border: 1.5px solid #BFDBFE;
+  border-left: 5px solid #2563EB;
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.07);
+}
+
+.culture-user-q-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.culture-user-q-badge-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.culture-user-q-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #1D4ED8;
+  background: #DBEAFE;
+  padding: 2.5px 8px;
+  border-radius: 6px;
+  letter-spacing: -0.2px;
+}
+
+.culture-user-q-time {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94A3B8;
+}
+
+.culture-user-q-text {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0F172A;
+  line-height: 1.45;
+  word-break: keep-all;
+  letter-spacing: -0.3px;
+}
+
+/* ================= 2. AI 가이드북 상세 해설 카드 (15.5px 글 중심) ================= */
+.culture-book-card,
 .culture-guide-result {
-  margin-top: 16px;
-  padding: 16px;
-  background: linear-gradient(180deg, #FAFAFA 0%, #FFFDFB 100%);
+  padding: 18px 18px 16px 18px;
+  background: #FFFFFF;
   border: 1.5px solid #FED7AA;
-  border-radius: 16px;
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.02);
+  border-radius: 18px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.05);
   transition: all 0.25s ease;
 }
 
+.culture-book-card-header,
 .culture-result-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
+.culture-book-tag-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.culture-book-tag,
 .culture-result-tag {
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 800;
-  color: #EA580C;
+  color: #C2410C;
   background: #FFF7ED;
   border: 1px solid #FFEDD5;
-  padding: 3px 8px;
-  border-radius: 6px;
+  padding: 3.5px 8px;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
+.culture-book-point-badge {
+  font-size: 11px;
+  font-weight: 800;
+  color: #B45309;
+  background: #FEF3C7;
+  border: 1px solid #FDE68A;
+  padding: 3px 8px;
+  border-radius: 7px;
+}
+
+.culture-book-time,
 .culture-result-time {
   font-size: 11px;
   font-weight: 600;
   color: #94A3B8;
 }
 
+.culture-book-title,
 .culture-res-title {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 800;
   color: #0F172A;
-  margin: 0 0 10px 0;
+  margin: 6px 0 14px 0;
   line-height: 1.4;
-  letter-spacing: -0.3px;
+  letter-spacing: -0.4px;
 }
 
-.culture-res-body {
+/* 💡 핵심 요약 박스 */
+.culture-point-box {
+  background: #FFFDF7;
+  border: 1.5px solid #FDE68A;
+  border-left: 4px solid #F59E0B;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.06);
+}
+
+.culture-point-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+
+.culture-point-icon {
+  font-size: 14px;
+}
+
+.culture-point-title {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #92400E;
+  letter-spacing: -0.2px;
+}
+
+.culture-point-list {
+  margin: 0;
+  padding-left: 18px;
+  list-style-type: disc;
+}
+
+.culture-point-list li {
   font-size: 14px;
   font-weight: 500;
-  color: #334155;
-  line-height: 1.7;
+  color: #475569;
+  line-height: 1.6;
+  margin-bottom: 6px;
   word-break: keep-all;
-  white-space: normal;
-  border-left: 3.5px solid #EA580C;
-  padding-left: 12px;
-  margin-bottom: 14px;
 }
 
+.culture-point-list li:last-child {
+  margin-bottom: 0;
+}
+
+.culture-point-list strong {
+  color: #1E293B;
+  font-weight: 700;
+}
+
+/* 📖 15.5px 고가독성 상세 해설 본문 */
+.culture-book-body,
+.culture-res-body {
+  font-size: 15.5px !important;
+  line-height: 1.85 !important;
+  color: #1E293B !important;
+  font-weight: 450;
+  word-break: keep-all;
+  white-space: normal;
+  letter-spacing: -0.25px;
+  margin-bottom: 16px;
+}
+
+.culture-book-body p,
+.culture-res-body p {
+  margin: 0 0 14px 0;
+  line-height: 1.85;
+}
+
+.culture-book-body p:last-child,
+.culture-res-body p:last-child {
+  margin-bottom: 4px;
+}
+
+.culture-book-body strong,
 .culture-res-body strong {
   color: #0F172A;
+  font-weight: 750;
+  background: linear-gradient(to top, rgba(254, 215, 170, 0.5) 0%, rgba(254, 215, 170, 0.5) 45%, transparent 45%);
+  padding: 0 2px;
+}
+
+.culture-book-body em,
+.culture-res-body em {
+  font-style: normal;
   font-weight: 700;
+  color: #C2410C;
 }
 
 /* 액션 버튼 그룹 */
 .culture-result-actions {
   display: flex;
   gap: 8px;
-  padding-top: 10px;
-  border-top: 1px solid #FED7AA;
+  padding-top: 12px;
+  border-top: 1px dashed #FED7AA;
 }
 
 .culture-action-btn {

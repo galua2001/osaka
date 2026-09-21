@@ -2,7 +2,7 @@
    OsakaGo - 오사카 여행 번역기 & 음성 길찾기 & 맛집 가이드 메인 스크립트
    ========================================================================== */
 
-const CURRENT_VERSION = '10.0';
+const CURRENT_VERSION = '10.1';
 
 // 전역 상태
 const state = {
@@ -5433,24 +5433,108 @@ const cultureKnowledgeBase = [
   }
 ];
 
-// 전역 문화 가이드 상태
+// 전역 문화 가이드 상태 (v10.1)
 let cultureGuideState = {
   activeSpeechText: '',
   activeTitle: '',
   isSpeaking: false,
+  speakingBlockId: null,
   recognition: null,
   isListening: false
 };
 
+// 주제별 3대 핵심 포인트 사전 (없을 시 자동 추출)
+const culturePredefinedPoints = {
+  'osaka-castle': [
+    '천하 통일의 본거지: 1583년 도요토미 히데요시가 권력을 과시하고 전국을 다스리기 위해 축조한 난공불락의 요새입니다.',
+    '시민의 손으로 부활: 1931년 오사카 시민들이 자발적으로 모금한 성금으로 현대식 철근 콘크리트 천수각으로 복원되었습니다.',
+    '관람 핵심 꿀팁: 내부에 현대식 엘리베이터 완비, 8층 전망대에서 오사카 시내를 360도 파노라마로 감상할 수 있습니다.'
+  ],
+  'shrine-etiquette': [
+    '토리이 통과 예절: 통과 전 가볍게 목례하고, 가운데는 신의 길이므로 좌우 가장자리로 보행합니다.',
+    '새전함 5엔의 의미: 5엔(고엔)은 좋은 인연(ご縁, 고엔)과 발음이 같아 신과의 소중한 인연을 맺는다는 뜻입니다.',
+    '참배 3단계 법칙: 2번 허리 숙여 절(2례) ➔ 가슴 높이에서 2번 박수(2박수) ➔ 소원 후 1번 절(1례)로 마무리합니다.'
+  ],
+  'temizuya-washing': [
+    '마시는 물이 아닌 정화의 물: 신을 만나기 전 손과 입의 부정을 깨끗이 씻어내는 정결 의식 공간입니다.',
+    '국자 1번의 물로 완결: 국자로 물을 떠서 왼손 씻기 ➔ 오른손 씻기 ➔ 손바닥에 물 받아 입 헹구기 순서로 진행합니다.',
+    '절대 금기 에티켓: 국자에 직접 입을 대면 안 되며, 마지막엔 국자를 수직으로 세워 손잡이를 씻고 엎어둡니다.'
+  ],
+  'glico-man-origin': [
+    '만세 포즈의 탄생: 글리코 캐러멜 1알의 열량(15.3kcal)이 300미터를 달릴 때 쓰는 에너지라는 과학적 착안에서 출발했습니다.',
+    '1935년부터 이어진 명물: 도톤보리 에비스 다리에서 전 세계 여행객들이 따라 하는 오사카 최고의 국민 인증샷 명소입니다.',
+    '현재는 6대 LED 간판: 밤이 되면 14만 개의 화려한 LED가 켜지며 배경이 오사카 주요 명소들로 시시각각 바뀝니다.'
+  ],
+  'otoshi-culture': [
+    '오토시(자릿세)의 본질: 팁 문화가 없는 일본에서 매장 좌석 청결과 환영의 의미로 술과 함께 내어주는 기본 안주비입니다.',
+    '비용 수준: 보통 1인당 300~500엔 선이며, 식전에 미리 공지되지 않아도 영수증에 합산되어 청구됩니다.',
+    '문화적 이해: 오사카 이자카야 고유의 오랜 음식 풍습이므로 기분 좋은 식사의 시작으로 이해하시는 것이 좋습니다.'
+  ],
+  'kushikatsu-rule': [
+    '니도즈케 킨시(소스 2번 찍기 금지): 테이블의 우스터소스 통은 모두가 함께 쓰는 공용이므로 베어 문 꼬치는 절대 재입수 금지입니다.',
+    '처음에 푹 담그기: 먹기 전에 꼬치 전체를 소스 통에 푹 담가 소스를 골고루 듬뿍 묻혀 꺼내어 먹습니다.',
+    '소스 리필 비법: 먹다가 소스가 부족할 때는 기본 제공되는 신선한 생양배추로 소스를 숟가락처럼 떠서 뿌려 먹습니다.'
+  ],
+  'tsutenkaku-billiken': [
+    '오사카 서민의 상징: 1912년 파리 에펠탑과 개선문을 본떠 신세카이에 세워진 유서 깊은 전망 랜드마크입니다.',
+    '행운의 신 빌리켄: 팔이 짧아 스스로 발을 긁지 못하는 신화 속 캐릭터로, 대신 발바닥을 간지럽히면 소원이 성취됩니다.',
+    '반질반질한 발바닥: 수많은 참배객들의 손길로 발바닥이 움푹 파여 있으며, 가볍게 문지르는 것만으로도 행운이 찾아옵니다.'
+  ],
+  'onsen-etiquette': [
+    '입욕 전 몸 씻기 필수: 온천수는 함께 쓰는 깨끗한 물이므로 탕에 들어가기 전 샤워 공간에서 비누칠 후 깨끗이 씻습니다.',
+    '수건 탕에 넣기 금지: 작은 세면 수건은 탕물에 넣지 않고 머리 위에 얹거나 탕가에 가지런히 올려둡니다.',
+    '문신(타투) 주의: 전통 규정상 제한하는 곳이 많으므로 방수 테이프로 가리거나 전세탕(프라이빗 가족탕)을 이용합니다.'
+  ]
+};
+
+// 항목별 3대 핵심 포인트 추출 함수
+function getCulturePoints(item) {
+  if (item.points && Array.isArray(item.points) && item.points.length > 0) {
+    return item.points;
+  }
+  if (culturePredefinedPoints[item.id]) {
+    return culturePredefinedPoints[item.id];
+  }
+  // 본문 텍스트에서 지능형 3대 포인트 도출
+  const plain = (item.html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const sentences = plain.split(/[.!?]\s+/).filter(s => s.length > 15 && s.length < 100);
+  if (sentences.length >= 3) {
+    return [
+      sentences[0] + '.',
+      sentences[1] + '.',
+      sentences[2] + '.'
+    ];
+  }
+  return [
+    '오사카의 유구한 역사와 상인 문화가 살아 숨 쉬는 대표적인 이야기입니다.',
+    '현지 여행 중 알아두면 에티켓을 지키며 훨씬 더 깊이 있게 명소를 즐길 수 있습니다.',
+    '궁금한 점은 언제든 글(텍스트)이나 음성으로 편하게 추가 질문해 보세요!'
+  ];
+}
+
+// HTML 문단 형식 정리 헬퍼 (<br><br>을 깔끔한 <p> 문단으로 변환)
+function formatCultureBodyHtml(rawHtml) {
+  if (!rawHtml) return '';
+  // 이미 <p> 태그가 감싸져 있다면 그대로 반환
+  if (rawHtml.includes('<p>')) return rawHtml;
+  
+  const paragraphs = rawHtml.split(/<br\s*\/?>\s*<br\s*\/?>/i);
+  return paragraphs
+    .map(p => p.trim())
+    .filter(p => p.length > 0)
+    .map(p => `<p>${p}</p>`)
+    .join('');
+}
+
+// 문화 가이드 모듈 초기화
 function initCultureGuide() {
   const micBtn = document.getElementById('culture-mic-btn');
   const queryInput = document.getElementById('culture-query-input');
   const askBtn = document.getElementById('culture-ask-btn');
-  const ttsBtn = document.getElementById('culture-tts-btn');
-  const copyBtn = document.getElementById('culture-copy-btn');
+  const clearBtn = document.getElementById('culture-clear-feed-btn');
   const chipBtns = document.querySelectorAll('.culture-chip-btn');
 
-  // 1. 추천 질문 칩 클릭 이벤트 연동
+  // 1. 추천 질문 칩 클릭 이벤트 연동 (터치 즉시 상세 글 렌더링)
   chipBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       const q = btn.getAttribute('data-query');
@@ -5461,7 +5545,7 @@ function initCultureGuide() {
     });
   });
 
-  // 2. 질문하기 버튼 클릭
+  // 2. 질문하기 버튼 클릭 (0.1초 즉시 렌더링)
   if (askBtn) {
     askBtn.addEventListener('click', () => {
       const q = queryInput ? queryInput.value.trim() : '';
@@ -5474,43 +5558,69 @@ function initCultureGuide() {
     });
   }
 
-  // 3. 엔터 키 입력 시 질문 실행
+  // 3. 엔터 키 입력 시 질문 즉시 실행
   if (queryInput) {
     queryInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
         const q = queryInput.value.trim();
-        if (q) processCultureQuery(q);
+        if (q) {
+          processCultureQuery(q);
+        } else {
+          showToast('💡 궁금한 질문을 입력해 주세요!');
+        }
       }
     });
   }
 
-  // 4. 음성 마이크 STT 버튼 연동
+  // 4. 피드 기록 전체 비우기 버튼
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      resetCultureFeed();
+    });
+  }
+
+  // 5. 음성 마이크 STT 버튼 연동
   if (micBtn) {
     micBtn.addEventListener('click', () => {
       toggleCultureSpeechRecognition();
     });
   }
 
-  // 5. 음성으로 해설 듣기 TTS 버튼 연동
-  if (ttsBtn) {
-    ttsBtn.addEventListener('click', () => {
-      toggleCultureTts();
-    });
-  }
+  // 6. 초기 렌더링된 첫 번째 Q&A 카드의 액션 버튼 바인딩
+  bindInitialCultureBlockEvents();
 
-  // 6. 해설 복사 버튼 연동
-  if (copyBtn) {
-    copyBtn.addEventListener('click', () => {
-      copyCultureGuideAnswer();
-    });
-  }
-
-  // 초기 기본값 설정
+  // 초기 기본 활성 음성 텍스트 설정
   if (cultureKnowledgeBase.length > 0) {
     cultureGuideState.activeTitle = cultureKnowledgeBase[0].title;
     cultureGuideState.activeSpeechText = cultureKnowledgeBase[0].speechText;
   }
+}
+
+// 초기 블록 이벤트 바인딩
+function bindInitialCultureBlockEvents() {
+  const initialBlock = document.getElementById('culture-guide-result');
+  if (!initialBlock) return;
+
+  const ttsBtn = initialBlock.querySelector('.culture-tts-btn');
+  const copyBtn = initialBlock.querySelector('.culture-copy-btn');
+  const item = cultureKnowledgeBase[0];
+
+  if (ttsBtn) {
+    ttsBtn.addEventListener('click', () => {
+      toggleBlockTts('qa-init-0', item.speechText, ttsBtn);
+    });
+  }
+
+  if (copyBtn) {
+    copyBtn.addEventListener('click', () => {
+      const qText = '오사카성은 왜 유명하고 어떤 역사가 있나요?';
+      const points = getCulturePoints(item);
+      copyBlockContent(qText, item, points);
+    });
+  }
+
+  updateCultureFeedCount();
 }
 
 // 음성 질문 인식 (STT) 시작 / 중지 토글
@@ -5626,105 +5736,302 @@ function findCultureAnswer(query) {
   return {
     id: 'custom-guide-' + Date.now(),
     title: `💡 오사카 AI 도슨트: "${escapeHtml(query)}" 안내`,
-    html: `오사카와 일본 문화에 대해 질문해 주신 <strong>"${escapeHtml(query)}"</strong>에 대해 안내해 드립니다.<br><br>
-오사카는 과거부터 일본의 물류와 상업을 주도해 온 <strong>'천하의 부엌(天下の台所)'</strong>으로 불리며, 타인을 먼저 배려하고 융통성 있게 소통하는 따뜻한 상인 문화가 깊게 자리 잡고 있습니다.<br><br>
-여행 중 현지인을 대할 때는 항상 눈을 마주치며 가벼운 목례와 함께 <strong>"스미마센(실례합니다/감사합니다)"</strong>, <strong>"아리가토 고자이마스(대단히 감사합니다)"</strong>를 생활화하시면 어디서나 환한 미소와 친절한 대접을 받으실 수 있습니다.<br><br>
-더 구체적인 내용이 궁금하시다면 상단의 <em>🏯 오사카성 역사</em>, <em>⛩️ 신사 참배 & 손 씻기</em>, <em>🏃 글리코상 유래</em>, <em>🍢 오토시 문화</em> 칩을 터치해 보세요!`,
+    points: [
+      `오사카 고유의 상인 문화와 배려가 깃든 "${escapeHtml(query)}"에 대한 특별 해설입니다.`,
+      `현지인과의 소통 시 공손한 인사말과 미소는 모든 여행의 문을 열어주는 만능 열쇠입니다.`,
+      `더욱 상세한 지식이 필요하시면 추천 질문 칩(오사카성, 신사 참배 등)을 터치해 보세요.`
+    ],
+    html: `<p>오사카와 일본 문화에 대해 질문해 주신 <strong>"${escapeHtml(query)}"</strong>에 대해 안내해 드립니다.</p>
+<p>오사카는 과거 에도 시대부터 일본 전역의 물류와 쌀 거래를 주도해 온 <strong>'천하의 부엌(天下の台所)'</strong>으로 불리며, 타인을 먼저 배려하고 유쾌하게 소통하는 따뜻한 상인 정신이 깊게 자리 잡고 있습니다.</p>
+<p>여행 중 현지인을 대할 때는 항상 눈을 마주치며 가벼운 목례와 함께 <strong>"스미마센(실례합니다/감사합니다)"</strong>, <strong>"아리가토 고자이마스(대단히 감사합니다)"</strong>를 건네시면 언제 어디서나 가장 환한 미소와 친절한 대접을 받으실 수 있습니다.</p>
+<p>더 구체적인 내용이 궁금하시다면 상단의 <em>🏯 오사카성 역사</em>, <em>⛩️ 신사 참배 & 손 씻기</em>, <em>🏃 글리코상 유래</em>, <em>🍢 오토시 문화</em> 칩을 터치해 보세요!</p>`,
     speechText: `${query}에 대해 안내해 드립니다. 오사카는 인정과 실용성을 가장 소중히 여기는 상인의 도시입니다. 스미마센과 아리가토 고자이마스 같은 공손한 인사말을 자주 건네시면 현지인들의 따뜻한 배려와 친절을 느끼실 수 있습니다.`
   };
 }
 
-// 질문 처리 메인 프로세서
-function processCultureQuery(query) {
-  const item = findCultureAnswer(query);
-  const titleEl = document.getElementById('culture-res-title');
-  const bodyEl = document.getElementById('culture-res-body');
-  const timeEl = document.getElementById('culture-result-time');
-  const resultCard = document.getElementById('culture-guide-result');
+// 개별 Q&A 블록 DOM 생성 함수 (질문 카드 + 15.5px 가이드북 카드)
+function createCultureQABlock(queryText, item) {
+  const blockId = 'qa-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+  const now = new Date();
+  const timeStr = (now.getHours() < 12 ? '오전 ' : '오후 ') + (now.getHours() % 12 || 12) + ':' + String(now.getMinutes()).padStart(2, '0');
 
-  if (titleEl) titleEl.innerHTML = item.title;
-  if (bodyEl) bodyEl.innerHTML = item.html;
-  if (timeEl) {
-    const now = new Date();
-    const timeStr = (now.getHours() < 12 ? '오전 ' : '오후 ') + (now.getHours() % 12 || 12) + ':' + String(now.getMinutes()).padStart(2, '0');
-    timeEl.innerText = timeStr + ' 답변';
+  const points = getCulturePoints(item);
+  const pointsListHtml = points.map(pt => `<li>${pt}</li>`).join('');
+  const formattedHtml = formatCultureBodyHtml(item.html);
+
+  const block = document.createElement('div');
+  block.className = 'culture-qa-block';
+  block.setAttribute('data-qa-id', blockId);
+
+  block.innerHTML = `
+    <!-- 1. 내가 한 질문 카드 ([🙋 내가 한 질문: "○○○"]) -->
+    <div class="culture-user-q-card">
+      <div class="culture-user-q-header">
+        <div class="culture-user-q-badge-wrap">
+          <span class="culture-user-q-badge">🙋 내가 한 질문</span>
+        </div>
+        <span class="culture-user-q-time">${timeStr}</span>
+      </div>
+      <div class="culture-user-q-text">"${escapeHtml(queryText)}"</div>
+    </div>
+
+    <!-- 2. AI 가이드북 상세 해설 카드 (15.5px 글 중심 매거진) -->
+    <div class="culture-book-card">
+      <div class="culture-book-card-header">
+        <div class="culture-book-tag-row">
+          <span class="culture-book-tag">📖 AI 도슨트 상세 가이드북</span>
+          <span class="culture-book-point-badge">✨ 3대 핵심 요약 수록</span>
+        </div>
+        <span class="culture-book-time">${timeStr} 해설</span>
+      </div>
+      
+      <h3 class="culture-res-title culture-book-title">${item.title}</h3>
+      
+      <!-- 💡 3대 핵심 요약 박스 -->
+      <div class="culture-point-box">
+        <div class="culture-point-header">
+          <span class="culture-point-icon">💡</span>
+          <span class="culture-point-title">한눈에 쏙 들어오는 3대 핵심 요약</span>
+        </div>
+        <ul class="culture-point-list">
+          ${pointsListHtml}
+        </ul>
+      </div>
+
+      <!-- 15.5px 고가독성 상세 본문 -->
+      <div class="culture-res-body culture-book-body">
+        ${formattedHtml}
+      </div>
+
+      <!-- 액션 버튼들 -->
+      <div class="culture-result-actions">
+        <button type="button" class="culture-action-btn culture-tts-btn">
+          <span>🔊</span>
+          <span class="culture-tts-text">음성으로 해설 듣기</span>
+        </button>
+        <button type="button" class="culture-action-btn culture-copy-btn">
+          <span>📋</span>
+          <span>상세 글 복사</span>
+        </button>
+      </div>
+    </div>
+  `;
+
+  // 이벤트 바인딩
+  const ttsBtn = block.querySelector('.culture-tts-btn');
+  const copyBtn = block.querySelector('.culture-copy-btn');
+
+  if (ttsBtn) {
+    ttsBtn.addEventListener('click', () => {
+      toggleBlockTts(blockId, item.speechText, ttsBtn);
+    });
   }
 
+  if (copyBtn) {
+    copyBtn.addEventListener('click', () => {
+      copyBlockContent(queryText, item, points);
+    });
+  }
+
+  return block;
+}
+
+// 질문 처리 메인 프로세서 (0.1초 즉시 렌더링 & 피드 관리)
+function processCultureQuery(query) {
+  if (!query || !query.trim()) return;
+
+  const q = query.trim();
+  const item = findCultureAnswer(q);
+  const feed = document.getElementById('culture-qa-feed');
+  const queryInput = document.getElementById('culture-query-input');
+
+  // Q&A 블록 즉시 생성
+  const block = createCultureQABlock(q, item);
+
+  if (feed) {
+    // 최신 Q&A를 피드 최상단에 즉시 삽입 (메신저/잡지처럼 자연스럽게 정돈)
+    feed.prepend(block);
+    block.classList.add('highlight-new');
+    
+    // 최대 30개 기록 유지 (메모리 최적화)
+    while (feed.children.length > 30) {
+      feed.removeChild(feed.lastChild);
+    }
+
+    // 부드러운 스크롤 포커스
+    block.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  // 피드 카운트 갱신
+  updateCultureFeedCount();
+
+  // 입력창 즉시 비우기 & 가독성을 위해 키보드 닫기
+  if (queryInput) {
+    queryInput.value = '';
+    queryInput.blur();
+  }
+
+  // 전역 상태 갱신
   cultureGuideState.activeTitle = item.title;
   cultureGuideState.activeSpeechText = item.speechText;
 
-  // 카드 부드러운 포커스
-  if (resultCard) {
-    resultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }
+  // 구버전 DOM 호환성 요소 갱신 (있을 경우 안전 동기화)
+  const legacyTitle = document.getElementById('culture-res-title');
+  const legacyBody = document.getElementById('culture-res-body');
+  if (legacyTitle) legacyTitle.innerHTML = item.title;
+  if (legacyBody) legacyBody.innerHTML = formatCultureBodyHtml(item.html);
 
-  showToast('🏛️ AI 가이드 해설이 준비되었습니다!');
+  showToast('🏛️ 상세 텍스트 가이드북이 펼쳐졌습니다!');
 }
 
-// 음성 낭독 (TTS) 토글
-function toggleCultureTts() {
-  const ttsBtn = document.getElementById('culture-tts-btn');
-  const ttsText = document.getElementById('culture-tts-btn-text');
+// 피드 카운트 갱신 함수
+function updateCultureFeedCount() {
+  const feed = document.getElementById('culture-qa-feed');
+  const countEl = document.getElementById('culture-feed-count');
+  if (!feed || !countEl) return;
+  const count = feed.children.length;
+  countEl.innerText = count + '편의 글';
+}
 
-  if (cultureGuideState.isSpeaking) {
-    // 낭독 정지
+// 피드 기록 초기화 함수
+function resetCultureFeed() {
+  const feed = document.getElementById('culture-qa-feed');
+  if (!feed) return;
+
+  const item = cultureKnowledgeBase[0];
+  const qText = '오사카성은 왜 유명하고 어떤 역사가 있나요?';
+  const block = createCultureQABlock(qText, item);
+  
+  feed.innerHTML = '';
+  feed.appendChild(block);
+  updateCultureFeedCount();
+
+  // 낭독 정지
+  if ('speechSynthesis' in window) {
+    try { window.speechSynthesis.cancel(); } catch(e) {}
+  }
+  cultureGuideState.isSpeaking = false;
+  cultureGuideState.speakingBlockId = null;
+
+  showToast('🗑️ 가이드북 기록을 초기화했습니다.');
+}
+
+// 특정 블록 음성 낭독 (TTS) 토글 함수
+function toggleBlockTts(blockId, textToSpeak, btnEl) {
+  const textLabel = btnEl ? btnEl.querySelector('.culture-tts-text') || btnEl.querySelector('span:last-child') : null;
+
+  // 현재 이 블록을 읽고 있는 중이라면 ➔ 낭독 정지
+  if (cultureGuideState.isSpeaking && cultureGuideState.speakingBlockId === blockId) {
     if ('speechSynthesis' in window) {
       try { window.speechSynthesis.cancel(); } catch(e) {}
     }
     cultureGuideState.isSpeaking = false;
+    cultureGuideState.speakingBlockId = null;
     state.isSpeakingNow = false;
-    if (ttsBtn) ttsBtn.classList.remove('speaking');
-    if (ttsText) ttsText.innerText = '음성으로 해설 듣기';
+
+    if (btnEl) btnEl.classList.remove('speaking');
+    if (textLabel) textLabel.innerText = '음성으로 해설 듣기';
     showToast('⏹️ 음성 해설을 정지했습니다.');
     return;
   }
 
-  const textToSpeak = cultureGuideState.activeSpeechText || '해설 내용이 없습니다.';
-  if (ttsBtn) ttsBtn.classList.add('speaking');
-  if (ttsText) ttsText.innerText = '⏹️ 낭독 정지';
-  cultureGuideState.isSpeaking = true;
+  // 이전 다른 블록 낭독 모두 중지
+  if ('speechSynthesis' in window) {
+    try { window.speechSynthesis.cancel(); } catch(e) {}
+  }
+  document.querySelectorAll('.culture-tts-btn.speaking').forEach(b => {
+    b.classList.remove('speaking');
+    const lbl = b.querySelector('.culture-tts-text') || b.querySelector('span:last-child');
+    if (lbl) lbl.innerText = '음성으로 해설 듣기';
+  });
 
-  speakText(textToSpeak, 'ko', () => {
+  // 새 블록 낭독 시작
+  const speech = textToSpeak || '해설 내용이 없습니다.';
+  if (btnEl) btnEl.classList.add('speaking');
+  if (textLabel) textLabel.innerText = '⏹️ 낭독 정지';
+  cultureGuideState.isSpeaking = true;
+  cultureGuideState.speakingBlockId = blockId;
+
+  speakText(speech, 'ko', () => {
     cultureGuideState.isSpeaking = false;
-    if (ttsBtn) ttsBtn.classList.remove('speaking');
-    if (ttsText) ttsText.innerText = '음성으로 해설 듣기';
+    cultureGuideState.speakingBlockId = null;
+    if (btnEl) btnEl.classList.remove('speaking');
+    if (textLabel) textLabel.innerText = '음성으로 해설 듣기';
   });
 }
 
-// 해설 복사하기
-function copyCultureGuideAnswer() {
-  const bodyEl = document.getElementById('culture-res-body');
-  const titleEl = document.getElementById('culture-res-title');
-  if (!bodyEl) return;
+// 레거시 전역 TTS 토글 호환 함수
+function toggleCultureTts() {
+  const feed = document.getElementById('culture-qa-feed');
+  const firstBlock = feed ? feed.firstElementChild : document.getElementById('culture-guide-result');
+  const btn = firstBlock ? firstBlock.querySelector('.culture-tts-btn') : document.getElementById('culture-tts-btn');
+  const blockId = firstBlock ? (firstBlock.getAttribute('data-qa-id') || 'qa-init-0') : 'qa-init-0';
+  toggleBlockTts(blockId, cultureGuideState.activeSpeechText, btn);
+}
 
-  const titleText = titleEl ? titleEl.innerText.trim() + '\n\n' : '';
-  const plainText = titleText + bodyEl.innerText.trim() + '\n\n[출처: OsakaGo 오사카 역사 & 문화 AI 가이드]';
+// Q&A 전체 내용 정갈하게 클립보드 복사 함수
+function copyBlockContent(queryText, item, points) {
+  const pointsText = points.map((p, idx) => `${idx + 1}. ${p}`).join('\n');
+  const plainBody = (item.html || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  const formattedText = `[🙋 내가 한 질문: "${queryText}"]\n\n` +
+    `[📖 ${item.title}]\n\n` +
+    `[💡 한눈에 쏙 들어오는 3대 핵심 요약]\n` +
+    `${pointsText}\n\n` +
+    `[상세 가이드 해설]\n` +
+    `${plainBody}\n\n` +
+    `---\n[출처: OsakaGo 오사카 역사 & 문화 AI 가이드북]`;
 
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(plainText).then(() => {
-      showToast('📋 해설이 클립보드에 복사되었습니다!');
+    navigator.clipboard.writeText(formattedText).then(() => {
+      showToast('📋 질문과 상세 해설이 클립보드에 복사되었습니다!');
     }).catch(() => {
-      fallbackCopy(plainText);
+      fallbackCopyText(formattedText);
     });
   } else {
-    fallbackCopy(plainText);
+    fallbackCopyText(formattedText);
   }
+}
 
-  function fallbackCopy(text) {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.position = 'fixed';
-    ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    ta.focus();
-    ta.select();
-    try {
-      document.execCommand('copy');
-      showToast('📋 해설이 복사되었습니다!');
-    } catch (e) {
-      showToast('⚠️ 복사에 실패했습니다.');
-    }
-    document.body.removeChild(ta);
+// 레거시 호환용 복사 함수
+function copyCultureGuideAnswer() {
+  const titleEl = document.getElementById('culture-res-title');
+  const bodyEl = document.getElementById('culture-res-body');
+  const titleText = titleEl ? titleEl.innerText.trim() : '';
+  const bodyText = bodyEl ? bodyEl.innerText.trim() : '';
+  const text = (titleText ? `[📖 ${titleText}]\n\n` : '') + bodyText + '\n\n[출처: OsakaGo 오사카 역사 & 문화 AI 가이드북]';
+  
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('📋 해설이 클립보드에 복사되었습니다!');
+    }).catch(() => {
+      fallbackCopyText(text);
+    });
+  } else {
+    fallbackCopyText(text);
   }
+}
+
+// 폴백 클립보드 복사 헬퍼
+function fallbackCopyText(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try {
+    document.execCommand('copy');
+    showToast('📋 상세 글이 복사되었습니다!');
+  } catch (e) {
+    showToast('⚠️ 복사에 실패했습니다.');
+  }
+  document.body.removeChild(ta);
 }
 
