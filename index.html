@@ -8,10 +8,10 @@
   <meta http-equiv="Expires" content="0">
   <title>OsakaGo - 오사카 여행 일본어 번역기 & 길찾기 지도 & 맛집 가이드</title>
 
-  <!-- 강력한 모바일 캐시 영구 파괴 & v9.6 자동 강제 새로고침 엔진 -->
+  <!-- 강력한 모바일 캐시 영구 파괴 & v9.9 자동 강제 새로고침 엔진 -->
   <script>
     (function() {
-      var CURRENT_VERSION = '9.8';
+      var CURRENT_VERSION = '9.9';
       var urlParams = new URLSearchParams(window.location.search);
       // URL에 최신 버전 태그가 없으면 즉시 캐시를 뚫고 강제 새로고침 리다이렉트
       if (urlParams.get('v') !== CURRENT_VERSION) {
@@ -70,7 +70,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   
   <!-- 앱 스타일시트 -->
-  <link rel="stylesheet" href="style.css?v=9.8">
+  <link rel="stylesheet" href="style.css?v=9.9">
   <link rel="icon" href="icon-192.png">
 </head>
 <body>
@@ -83,7 +83,7 @@
       <div class="header-badge">
         <span>🇯🇵</span>
         <span>OSAKA TRAVEL COMPANION</span>
-        <span class="header-version-badge" id="header-version-badge">v9.8</span>
+        <span class="header-version-badge" id="header-version-badge">v9.9</span>
       </div>
       <div class="header-title-row">
         <div>
@@ -93,16 +93,16 @@
           </h1>
           <p class="header-subtitle">오사카 여행 · 둘만의 추억 앨범 · 길찾기 지도 · 현지 맛집</p>
         </div>
-        <span class="header-subbadge">v9.8</span>
+        <span class="header-subbadge">v9.9</span>
       </div>
     </header>
 
     <!-- 🔥 스마트폰 캐시 탈출 & 최신 버전 즉시 동기화 바 -->
-    <div class="force-refresh-bar" onclick="window.location.replace(window.location.origin+window.location.pathname+'?v=9.8&t='+Date.now())" style="background: linear-gradient(135deg, #1E40AF, #2563EB); border-radius: 14px; margin: 10px 16px 6px 16px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; box-shadow: 0 4px 12px rgba(37,99,235,0.25);">
+    <div class="force-refresh-bar" onclick="window.location.replace(window.location.origin+window.location.pathname+'?v=9.9&t='+Date.now())" style="background: linear-gradient(135deg, #1E40AF, #2563EB); border-radius: 14px; margin: 10px 16px 6px 16px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; box-shadow: 0 4px 12px rgba(37,99,235,0.25);">
       <div style="display: flex; align-items: center; gap: 10px;">
         <span style="font-size: 22px;">🚀</span>
         <div style="text-align: left;">
-          <div style="font-size: 13.5px; font-weight: 800; color: #FFFFFF;">최신 v9.8 동기화 (구글 지도 실시간 길찾기 탑재)!</div>
+          <div style="font-size: 13.5px; font-weight: 800; color: #FFFFFF;">최신 v9.9 동기화 (실시간 글자 자막 & 직관 번역기 탑재)!</div>
           <div style="font-size: 11px; color: #BFDBFE;">터치 시 캐시 삭제 & 최신 동기화 🔄</div>
         </div>
       </div>
@@ -162,6 +162,12 @@
             </button>
           </div>
 
+          <!-- ✏️ 말하기 대신 글자 직접 입력 & 번역 바 -->
+          <div class="voice-quick-input-row">
+            <input type="text" id="voice-direct-input" class="voice-direct-input" placeholder="✏️ 말하기 대신 글자 직접 입력 (예: 얼마예요, 화장실)">
+            <button type="button" id="voice-direct-trans-btn" class="voice-direct-trans-btn">번역</button>
+          </div>
+
           <!-- 실시간 음성 청취 모니터 -->
           <div class="voice-stream-box" id="voice-stream-box" style="display: none;">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
@@ -170,14 +176,14 @@
             </div>
           </div>
 
-          <!-- 번역 결과 상자 (번역 글자 중심 초깔끔 UI) -->
-          <div class="voice-result-box" id="voice-result-box" style="display: none;">
+          <!-- 번역 결과 상자 (번역 글자 중심 상시 노출 카드) -->
+          <div class="voice-result-box" id="voice-result-box" style="display: block;">
             <div class="voice-result-header">
-              <span class="result-badge" id="voice-result-badge">🇯🇵 일본어 번역 & 낭독</span>
+              <span class="result-badge" id="voice-result-badge">🇯🇵 일본어 번역 &amp; 낭독</span>
             </div>
-            <div class="voice-res-original" id="voice-res-original"></div>
-            <div class="voice-res-japanese" id="voice-res-japanese"></div>
-            <div class="voice-res-reading" id="voice-res-reading"></div>
+            <div class="voice-res-original" id="voice-res-original">🗣️ [말하기 또는 글자 입력 대기 중]</div>
+            <div class="voice-res-japanese" id="voice-res-japanese">마이크 버튼을 누르고 말씀하시거나 글자를 입력하면 여기에 크게 나타납니다.</div>
+            <div class="voice-res-reading" id="voice-res-reading">[한글 발음 독음이 여기에 표시됩니다]</div>
             
             <!-- 액션 버튼 행: [🔊 다시 듣기], [📱 크게 보기], [📋 복사] -->
             <div class="voice-result-actions">
@@ -633,8 +639,8 @@
 
   <!-- Leaflet 지도 JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <!-- 메인 앱 스크립트 연결 (v9.8) -->
-  <script src="app.js?v=9.8"></script>
+  <!-- 메인 앱 스크립트 연결 (v9.9) -->
+  <script src="app.js?v=9.9"></script>
 
   <!-- PWA 서비스 워커 관리 및 앱 설치 제어 -->
   <script>

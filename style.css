@@ -1952,14 +1952,67 @@ body {
   white-space: nowrap;
 }
 
-/* 번역 글자 중심 초깔끔 번역 결과 박스 */
+/* ✏️ 실시간 글자 직접 입력 & 번역 바 */
+.voice-quick-input-row {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+  align-items: center;
+}
+
+.voice-direct-input {
+  flex: 1;
+  padding: 12px 14px;
+  border: 1.5px solid #CBD5E1;
+  border-radius: 12px;
+  font-size: 14px;
+  outline: none;
+  background: #FFF;
+  color: #0F172A;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.voice-direct-input:focus {
+  border-color: #2563EB;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.voice-direct-input::placeholder {
+  color: #94A3B8;
+  font-size: 13.5px;
+}
+
+.voice-direct-trans-btn {
+  padding: 12px 18px;
+  background: #2563EB;
+  color: #FFF;
+  border: none;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: inherit;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+  transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.voice-direct-trans-btn:active {
+  background: #1D4ED8;
+  transform: scale(0.97);
+}
+
+/* 번역 글자 중심 초깔끔 번역 결과 박스 (상시 노출) */
 .voice-result-box {
   margin-top: 14px;
-  background: linear-gradient(135deg, #FFF9FA 0%, #FFFFFF 100%);
-  border: 2px solid #FECDD3;
+  background: #FFFFFF;
+  border: 1.5px solid #E2E8F0;
   border-radius: 16px;
   padding: 16px 14px 14px;
-  box-shadow: 0 4px 16px rgba(225, 29, 72, 0.08);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
   animation: fadeIn 0.25s ease;
 }
 

@@ -2,7 +2,7 @@
    OsakaGo - 오사카 여행 번역기 & 음성 길찾기 & 맛집 가이드 메인 스크립트
    ========================================================================== */
 
-const CURRENT_VERSION = '9.8';
+const CURRENT_VERSION = '9.9';
 
 // 전역 상태
 const state = {
@@ -2027,6 +2027,14 @@ function startVoiceTurn(speakerLang) {
     showToast('👂 [일본어 듣는 중] 일본인 상대방에게 폰을 대주세요...');
   }
 
+  // 🗣️ 음성 인식 시작 시 실시간 자막 박스(#voice-res-original) 즉시 안내 반영
+  const resOriginalInit = document.getElementById('voice-res-original');
+  if (resOriginalInit) {
+    resOriginalInit.innerText = speakerLang === 'ko' 
+      ? '🎙️ 말씀하시는 내용을 듣고 있습니다...' 
+      : '👂 일본인 상대방의 말씀을 듣고 있습니다...';
+  }
+
   try {
     const rec = new SpeechRecognition();
     voiceTurnRec = rec;
@@ -2057,6 +2065,12 @@ function startVoiceTurn(speakerLang) {
       if (currentSpoken) {
         voiceTurnBuffer = currentSpoken;
         if (streamText) streamText.innerText = `🗣️ "${currentSpoken}"`;
+
+        // 🗣️ 음성 인식 중간(onresult) 시 실시간 자막 출력
+        const resOriginal = document.getElementById('voice-res-original');
+        if (resOriginal) {
+          resOriginal.innerText = '🗣️ ' + currentSpoken;
+        }
 
         // ⏱️ 사용자가 말을 멈추었을 때 0.8초 후 자동 번역 트리거
         if (voiceSilenceTimer) clearTimeout(voiceSilenceTimer);
@@ -4521,27 +4535,42 @@ function setupEventListeners() {
     }
   }
 
-  // 직접 글자 입력 번역
-  const voiceManualInput = document.getElementById('voice-manual-input');
-  const voiceManualBtn = document.getElementById('voice-manual-btn');
-  function executeManualTranslate() {
-    const val = voiceManualInput ? voiceManualInput.value.trim() : '';
+  // ✏️ 말하기 대신 글자 직접 입력 & 번역기 (#voice-direct-input, #voice-direct-trans-btn)
+  const voiceDirectInput = document.getElementById('voice-direct-input') || document.getElementById('voice-manual-input');
+  const voiceDirectTransBtn = document.getElementById('voice-direct-trans-btn') || document.getElementById('voice-manual-btn');
+
+  function executeDirectTranslate() {
+    const inputEl = document.getElementById('voice-direct-input') || document.getElementById('voice-manual-input');
+    const val = inputEl ? inputEl.value.trim() : '';
     if (val) {
       unlockAudio();
-      // 글자 입력은 기본 한국어 ➔ 일본어로 번역
+      // 글자 입력은 한국어 ➔ 일본어로 즉시 번역
       triggerVoiceTranslate(val, 'ko');
-      if (voiceManualInput) voiceManualInput.value = '';
+      if (inputEl) inputEl.value = '';
+    } else {
+      showToast('✏️ 번역할 단어나 문장을 입력해 주세요. (예: 얼마예요)');
     }
   }
-  if (voiceManualBtn) voiceManualBtn.addEventListener('click', executeManualTranslate);
-  if (voiceManualInput) {
-    voiceManualInput.addEventListener('keydown', (e) => {
+
+  if (voiceDirectTransBtn) {
+    voiceDirectTransBtn.addEventListener('click', executeDirectTranslate);
+  }
+  const voiceManualBtnLegacy = document.getElementById('voice-manual-btn');
+  if (voiceManualBtnLegacy && voiceManualBtnLegacy !== voiceDirectTransBtn) {
+    voiceManualBtnLegacy.addEventListener('click', executeDirectTranslate);
+  }
+
+  const attachDirectEnterListener = (el) => {
+    if (!el) return;
+    el.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        executeManualTranslate();
+        executeDirectTranslate();
       }
     });
-  }
+  };
+  attachDirectEnterListener(document.getElementById('voice-direct-input'));
+  attachDirectEnterListener(document.getElementById('voice-manual-input'));
 
   // ⚡ 터치 즉시 일본어로 말해주는 1초 여행 표현 칩 이벤트 리스너
   document.querySelectorAll('.quick-speak-chip').forEach(btn => {
