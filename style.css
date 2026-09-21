@@ -2891,4 +2891,370 @@ body {
   word-break: keep-all;
 }
 
+/* ==========================================================================
+   오사카 역사 & 문화 AI 가이드 (글과 말로 질문 가능) 전용 스타일 (v10.0)
+   ========================================================================== */
+.culture-guide-card {
+  width: 100%;
+  box-sizing: border-box;
+  background: #FFFFFF;
+  border: 1.5px solid #FED7AA;
+  border-radius: 20px;
+  padding: 18px;
+  margin-top: 14px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 24px rgba(234, 88, 12, 0.08), 0 2px 6px rgba(15, 23, 42, 0.04);
+  font-family: inherit;
+  transition: all 0.2s ease;
+}
+
+.culture-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.culture-badge-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.culture-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #7C2D12;
+  background: #FFEDD5;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  border: 1px solid #FED7AA;
+}
+
+.culture-live-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #047857;
+  background: #D1FAE5;
+  padding: 3px 8px;
+  border-radius: 9999px;
+}
+
+.culture-main-desc {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.culture-main-desc strong {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0F172A;
+  letter-spacing: -0.3px;
+}
+
+.culture-main-desc span {
+  font-size: 12px;
+  color: #64748B;
+  line-height: 1.4;
+  word-break: keep-all;
+}
+
+/* 질문 입력 바 */
+.culture-input-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #F8FAFC;
+  border: 1.5px solid #CBD5E1;
+  border-radius: 14px;
+  padding: 5px 6px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.culture-input-bar:focus-within {
+  border-color: #EA580C;
+  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.15);
+  background: #FFFFFF;
+}
+
+.culture-mic-btn {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 12px;
+  border: none;
+  background: linear-gradient(135deg, #EA580C 0%, #C2410C 100%);
+  color: #FFFFFF;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 3px 8px rgba(234, 88, 12, 0.3);
+  transition: transform 0.15s, background 0.2s, box-shadow 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.culture-mic-btn:active {
+  transform: scale(0.92);
+}
+
+.culture-mic-btn.recording {
+  background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%);
+  animation: culturePulse 1.2s infinite;
+  box-shadow: 0 0 0 5px rgba(220, 38, 38, 0.35);
+}
+
+@keyframes culturePulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+  50% { transform: scale(1.06); box-shadow: 0 0 0 8px rgba(220, 38, 38, 0.15); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+}
+
+.culture-query-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 8px 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1E293B;
+  outline: none;
+  font-family: inherit;
+}
+
+.culture-query-input::placeholder {
+  color: #94A3B8;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.culture-ask-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: none;
+  background: #1E293B;
+  color: #FFFFFF;
+  font-size: 13.5px;
+  font-weight: 800;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, transform 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.culture-ask-btn:active {
+  transform: scale(0.95);
+  background: #0F172A;
+}
+
+/* 음성 인식 청취 중 상태바 */
+.culture-mic-status {
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  border-radius: 12px;
+  animation: fadeIn 0.25s ease;
+}
+
+.culture-listening-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #DC2626;
+}
+
+.culture-pulse-dot {
+  display: inline-block;
+  animation: cultureBlink 1s infinite alternate;
+}
+
+@keyframes cultureBlink {
+  0% { opacity: 0.3; transform: scale(0.85); }
+  100% { opacity: 1; transform: scale(1.15); }
+}
+
+/* 추천 질문 칩들 */
+.culture-chips-section {
+  margin-top: 14px;
+}
+
+.culture-chips-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748B;
+  margin-bottom: 8px;
+}
+
+.culture-chips-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.culture-chips-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.culture-chip-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  background: #FFF7ED;
+  border: 1px solid #FFEDD5;
+  border-radius: 9999px;
+  color: #9A3412;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.culture-chip-btn:hover {
+  background: #FFEDD5;
+  border-color: #FED7AA;
+  color: #7C2D12;
+}
+
+.culture-chip-btn:active {
+  transform: scale(0.95);
+  background: #FED7AA;
+}
+
+/* AI 가이드 답변 결과 박스 */
+.culture-guide-result {
+  margin-top: 16px;
+  padding: 16px;
+  background: linear-gradient(180deg, #FAFAFA 0%, #FFFDFB 100%);
+  border: 1.5px solid #FED7AA;
+  border-radius: 16px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.02);
+  transition: all 0.25s ease;
+}
+
+.culture-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.culture-result-tag {
+  font-size: 11px;
+  font-weight: 800;
+  color: #EA580C;
+  background: #FFF7ED;
+  border: 1px solid #FFEDD5;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.culture-result-time {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94A3B8;
+}
+
+.culture-res-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0F172A;
+  margin: 0 0 10px 0;
+  line-height: 1.4;
+  letter-spacing: -0.3px;
+}
+
+.culture-res-body {
+  font-size: 14px;
+  font-weight: 500;
+  color: #334155;
+  line-height: 1.7;
+  word-break: keep-all;
+  white-space: normal;
+  border-left: 3.5px solid #EA580C;
+  padding-left: 12px;
+  margin-bottom: 14px;
+}
+
+.culture-res-body strong {
+  color: #0F172A;
+  font-weight: 700;
+}
+
+/* 액션 버튼 그룹 */
+.culture-result-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid #FED7AA;
+}
+
+.culture-action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1.5px solid #E2E8F0;
+  background: #FFFFFF;
+  color: #1E293B;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.culture-action-btn:active {
+  transform: scale(0.97);
+}
+
+.culture-tts-btn {
+  background: linear-gradient(135deg, #EA580C 0%, #C2410C 100%);
+  border-color: #EA580C;
+  color: #FFFFFF;
+  box-shadow: 0 3px 8px rgba(234, 88, 12, 0.25);
+}
+
+.culture-tts-btn:hover {
+  background: linear-gradient(135deg, #C2410C 0%, #9A3412 100%);
+}
+
+.culture-tts-btn.speaking {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  border-color: #059669;
+  animation: cultureBlink 1.2s infinite alternate;
+}
+
+.culture-copy-btn {
+  background: #F8FAFC;
+  border-color: #CBD5E1;
+  color: #334155;
+}
+
+.culture-copy-btn:hover {
+  background: #E2E8F0;
+}
+
+
 

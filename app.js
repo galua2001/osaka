@@ -2,7 +2,7 @@
    OsakaGo - 오사카 여행 번역기 & 음성 길찾기 & 맛집 가이드 메인 스크립트
    ========================================================================== */
 
-const CURRENT_VERSION = '9.9';
+const CURRENT_VERSION = '10.0';
 
 // 전역 상태
 const state = {
@@ -441,6 +441,7 @@ function initializeApp() {
   try { renderPlans(); } catch(e) { console.warn('renderPlans error:', e); }
   try { initLiveDialog(); } catch(e) { console.warn('initLiveDialog error:', e); }
   try { renderAlbumFeed(); } catch(e) { console.warn('renderAlbumFeed error:', e); }
+  try { initCultureGuide(); } catch(e) { console.warn('initCultureGuide error:', e); }
   try { setupEventListeners(); } catch(e) { console.error('setupEventListeners error:', e); }
 }
 
@@ -5052,3 +5053,678 @@ async function handleDialogUtterance(text, fromLang) {
   // 상대방 언어로 즉시 음성 재생
   speakText(translated, toLang);
 }
+
+// ==========================================================================
+// 🏛️ 오사카 역사 & 문화 AI 가이드 (글과 말로 질문 가능) 엔진 (v10.0)
+// ==========================================================================
+
+const cultureKnowledgeBase = [
+  {
+    id: 'osaka-castle',
+    title: '🏯 도요토미 히데요시와 오사카성의 유구한 역사',
+    keywords: ['오사카성', '천수각', '도요토미', '히데요시', '오사카조', '성채', '여름의진', '겨울의진', '성', '축조'],
+    html: `오사카성은 1583년 일본 전국시대를 통일한 <strong>도요토미 히데요시</strong>가 자신의 절대 권력을 과시하고 천하 통일의 본거지로 삼기 위해 축조한 난공불락의 대성채입니다.<br><br>
+이후 1614~1615년 오사카 겨울·여름 전투에서 도쿠가와 이에야스 군대에 의해 함락되어 소실되었고, 에도 막부에 의해 재건되었으나 벼락 화재 등으로 천수각이 다시 불타는 비운을 겪었습니다.<br><br>
+지금 우리가 보는 황금빛 장식의 웅장한 천수각은 <strong>1931년 오사카 시민들의 자발적인 성금 모금</strong>으로 철근 콘크리트로 재건된 것으로, 내부에는 엘리베이터와 박물관이 현대적으로 갖춰져 있으며 8층 전망대에서는 오사카 시내 전경을 360도로 한눈에 조망할 수 있습니다!`,
+    speechText: '오사카성은 1583년 일본 전국시대를 통일한 도요토미 히데요시가 권력을 과시하고 본거지로 삼기 위해 축조한 대성채입니다. 이후 전쟁과 벼락으로 불타는 아픔을 겪었으나, 1931년 오사카 시민들의 자발적인 성금으로 웅장하게 재건되었습니다. 8층 전망대에서는 오사카 시내를 한눈에 내려다볼 수 있습니다.'
+  },
+  {
+    id: 'shrine-etiquette',
+    title: '⛩️ 신사(神社) 참배 예절: 2례 2박수 1례의 법칙',
+    keywords: ['신사', '참배', '예절', '2례', '박수', '절', '토리이', '인사', '5엔', '소원'],
+    html: `일본 신사(진자)를 방문할 때 현지인처럼 정중하게 참배하는 핵심 규칙입니다.<br><br>
+1. <strong>토리이(붉은 문) 통과:</strong> 토리이 문은 신의 영역으로 들어가는 입구입니다. 통과하기 전 가볍게 목례를 하고, 가운데 길은 '신의 통로'이므로 좌우 가장자리로 걷는 것이 예의입니다.<br>
+2. <strong>동전 넣기 (새전함):</strong> 보통 <strong>5엔(五円) 동전</strong>을 많이 넣습니다. 5엔은 일본어로 '고엔'이라 읽는데, '좋은 인연(ご縁, 고엔)'과 발음이 같아 신과 좋은 인연을 맺는다는 뜻이 담겨 있습니다.<br>
+3. <strong>2례 2박수 1례 (二礼二拍手一礼):</strong><br>
+   - 새전함 위의 방울 줄을 흔들어 소리를 냅니다.<br>
+   - 허리를 90도로 <strong>두 번 정중히 숙여 절(2례)</strong>합니다.<br>
+   - 가슴 높이에서 손뼉을 <strong>두 번 '탁! 탁!' 칩니다(2박수)</strong>.<br>
+   - 두 손을 모아 마음속으로 간절히 소원을 빕니다.<br>
+   - 마지막으로 허리를 다시 <strong>한 번 깊이 숙여 절(1례)</strong>하고 물러납니다.`,
+    speechText: '일본 신사 참배의 기본은 2례 2박수 1례입니다. 토리이 문을 통과할 때는 가운데 대신 가장자리로 걷고, 새전함에는 좋은 인연을 뜻하는 5엔 동전을 넣습니다. 종을 울린 후 두 번 절하고, 두 번 박수를 친 뒤 소원을 빌고, 마지막으로 한 번 절을 하시면 됩니다.'
+  },
+  {
+    id: 'temizuya-washing',
+    title: '💧 테미즈야(手水舎): 참배 전 손과 입을 정화하는 법',
+    keywords: ['손 씻', '손씻기', '테미즈야', '물', '정화', '약수터', '국자', '입 헹구기'],
+    html: `신사나 절 입구에 물이 졸졸 흐르는 정화 공간을 <strong>테미즈야(手水舎)</strong>라고 합니다. 마시는 약수가 아니라 신을 만나기 전 몸과 마음을 정갈히 씻는 의식입니다.<br><br>
+<strong>올바른 손 씻기 4단계 (국자 1번의 물로 끝내기):</strong><br>
+1. 오른손으로 국자를 들어 물을 가득 뜬 후, <strong>왼손</strong>을 씻습니다.<br>
+2. 국자를 왼손으로 바꿔 쥐고 <strong>오른손</strong>을 씻습니다.<br>
+3. 다시 오른손으로 국자를 잡고, <strong>왼손 손바닥에 물을 받아 입을 헹굽니다.</strong> (⚠️ 절대 국자에 직접 입을 대면 안 됩니다!)<br>
+4. 남은 물이 국자 손잡이를 타고 아래로 흘러내리도록 국자를 수직으로 세워 손잡이를 씻은 뒤 제자리에 엎어둡니다.`,
+    speechText: '신사 입구의 테미즈야는 마시는 물이 아니라 몸과 마음을 정화하는 곳입니다. 국자로 물을 떠서 왼손, 오른손 순서로 씻고, 손바닥에 물을 받아 입을 가볍게 헹굽니다. 국자에 직접 입을 대지 않는 것이 가장 중요한 에티켓입니다.'
+  },
+  {
+    id: 'glico-man-origin',
+    title: '🏃 도톤보리 글리코상의 100년 역사와 만세 포즈의 비밀',
+    keywords: ['글리코', '글리코상', '도톤보리', '마라톤', '에비스', '만세', '포즈', '캐러멜'],
+    html: `오사카 도톤보리 에비스 다리에서 누구나 만세 포즈로 사진을 찍는 <strong>글리코 러너(Glico Sign)</strong>는 1935년에 처음 세워졌습니다.<br><br>
+<strong>왜 마라톤 골인 포즈일까요?</strong><br>
+식품회사 에자키 글리코의 창업자 에자키 리이치는 굴에 풍부한 영양소인 '글리코겐'을 넣은 건강 캐러멜을 만들었습니다. 이 캐러멜 한 알의 열량이 15.3칼로리였는데, 이는 <strong>"키 165cm, 체중 55kg의 사람이 300미터를 달릴 때 소모하는 에너지"</strong>와 정확히 일치했습니다!<br><br>
+그래서 <em>"한 알에 300미터!"</em>라는 건강과 활력의 상징으로 결승선을 통과하는 마라톤 선수의 힘찬 모습을 간판으로 제작한 것입니다. 현재의 간판은 2014년에 교체된 <strong>제6대 LED 전광판</strong>으로, 밤이 되면 14만 개의 LED가 켜지며 배경이 오사카 명소로 시시각각 바뀝니다.`,
+    speechText: '도톤보리 글리코상은 1935년에 처음 설치된 활력의 상징입니다. 글리코 캐러멜 한 알의 열량이 300미터를 달리는 에너지와 같다는 점에서 착안하여 마라톤 결승선을 통과하는 힘찬 만세 포즈를 취하게 되었습니다. 현재는 6대째 LED 간판으로 밤마다 아름답게 빛납니다.'
+  },
+  {
+    id: 'otoshi-culture',
+    title: '🍢 이자카야 오토시(お通し, 자릿세) 문화의 이해',
+    keywords: ['오토시', '자릿세', '기본안주', '이자카야', '영수증', '테이블차지', '술집'],
+    html: `일본 이자카야(선술집)에 가면 시키지도 않은 작은 안주(절임류, 완두콩, 조림 등)가 인원수대로 나오고, 영수증에 300~500엔가량이 청구되어 당황하는 여행객이 많습니다. 이를 <strong>오토시(お通し)</strong>라고 부릅니다.<br><br>
+<strong>오토시 문화가 생긴 이유:</strong><br>
+1. <strong>손님을 환영하는 자리비(Table Charge):</strong> 술과 본 안주가 나오기 전까지 손님이 입가심하며 기다릴 수 있도록 배려하는 환영의 의미입니다.<br>
+2. <strong>팁이 없는 일본의 서비스 요금:</strong> 일본은 팁(Tip) 문화가 전혀 없습니다. 대신 매장을 이용하는 기본 좌석 요금과 공간 청결 유지비가 오토시에 포함되어 있습니다.<br><br>
+💡 <em>팁:</em> 대부분의 이자카야에서 오토시는 식당의 전통 룰이므로 거절하기 어렵지만, 식전에 미리 "오토시와 다이죠부데스(오토시는 괜찮습니다)"라고 정중히 물어보면 제외해 주는 가게도 있습니다.`,
+    speechText: '이자카야에서 주문하지 않아도 나오는 기본 안주와 비용을 오토시라고 부릅니다. 이는 팁 문화가 없는 일본에서 자리를 마련하고 환영한다는 의미의 테이블 자릿세 성격입니다. 보통 300엔에서 500엔 선이며 일본 특유의 선술집 문화로 이해하시면 좋습니다.'
+  },
+  {
+    id: 'kushikatsu-rule',
+    title: '🍢 쿠시카츠(꼬치튀김) 소스 두 번 찍기 절대 금지 룰!',
+    keywords: ['쿠시카츠', '소스', '두번', '신세카이', '금지', '양배추', '튀김', '니도즈케'],
+    html: `오사카 신세카이의 명물 꼬치튀김 '쿠시카츠' 가게 벽면에는 어디나 <strong>"소스 두 번 찍기 절대 금지(ソースの二度づけ禁止, 니도즈케 킨시)"</strong>라는 경고문이 붙어 있습니다.<br><br>
+<strong>왜 두 번 찍으면 안 될까요?</strong><br>
+테이블 위에 놓인 검은 우스터 우마미 소스 통은 나 혼자 쓰는 것이 아니라 <strong>여러 손님이 함께 사용하는 공용 소스 통</strong>이기 때문입니다. 한 입 베어 문 꼬치를 다시 소스 통에 담그는 것은 위생상 심각한 결례입니다.<br><br>
+<strong>오사카 현지인의 2가지 꿀팁:</strong><br>
+1. 먹기 전에 꼬치 전체를 소스 통에 푹 담가 소스를 듬뿍 묻혀둡니다.<br>
+2. 먹다가 소스가 부족하면, 기본으로 제공되는 <strong>생양배추 조각으로 소스를 숟가락처럼 푹 떠서</strong> 꼬치 위에 흘려뿌려 드시면 됩니다!`,
+    speechText: '오사카 쿠시카츠의 철칙은 소스 두 번 찍기 절대 금지입니다. 테이블의 소스 통을 여러 손님이 함께 쓰기 때문에 위생을 위한 배려입니다. 소스가 부족할 때는 기본 제공되는 양배추로 소스를 푹 떠서 꼬치 위에 뿌려 드시면 됩니다.'
+  },
+  {
+    id: 'tsutenkaku-billiken',
+    title: '🗼 신세카이 츠텐카쿠와 발바닥 긁는 행운의 신 빌리켄',
+    keywords: ['츠텐카쿠', '신세카이', '빌리켄', '발바닥', '소원', '타워', '행운'],
+    html: `오사카 서민 정취가 물씬 풍기는 신세카이의 랜드마크 <strong>츠텐카쿠(通天閣)</strong>는 "하늘과 통하는 높은 건물"이라는 뜻으로 1912년에 처음 지어졌습니다.<br><br>
+<strong>발바닥을 긁으면 행운이 오는 빌리켄(Billiken):</strong><br>
+츠텐카쿠 전망대에는 뾰족한 머리와 익살스러운 표정으로 발을 앞으로 쑥 내밀고 있는 황금빛 목각상 <strong>'빌리켄'</strong>이 있습니다.<br>
+1908년 미국의 여류 예술가 플로렌스 프레츠가 꿈속에서 본 신의 모습을 본떠 만든 것으로, 전 세계적인 행운의 마스코트가 되었습니다.<br><br>
+빌리켄의 <strong>양 발바닥을 두 손으로 정성스럽게 긁어주며 소원을 빌면</strong> 그 소원이 반드시 이루어진다고 전해져 지금도 수많은 여행객들의 손길로 발바닥이 움푹 파여 반질반질 빛나고 있습니다!`,
+    speechText: '신세카이의 츠텐카쿠 타워에는 익살스러운 표정의 행운의 신 빌리켄 상이 있습니다. 팔이 짧아 스스로 발을 긁지 못하는 빌리켄의 발바닥을 정성껏 긁어주면 소원이 이루어진다는 재미있는 전설이 있어 여행객들의 필수 코스입니다.'
+  },
+  {
+    id: 'onsen-etiquette',
+    title: '♨️ 일본 온천 & 대욕탕 에티켓: 머리 위 수건과 문신 규정',
+    keywords: ['온천', '목욕탕', '센토', '수건', '머리', '문신', '타투', '에티켓'],
+    html: `일본의 료칸 온천이나 대욕탕을 이용할 때 지켜야 할 전통적인 목욕 에티켓입니다.<br><br>
+1. <strong>탕에 들어가기 전 샤워 필수:</strong> 온천수는 모두가 함께 몸을 담그는 깨끗한 물입니다. 들어가기 전 앉아서 샤워기로 몸을 비누칠하여 깨끗이 씻은 후 입수합니다.<br>
+2. <strong>수건을 탕에 담그지 않기:</strong> 작은 세면 수건(테누구이)을 탕물에 넣는 것은 물을 오염시킨다고 여겨집니다. <strong>접어서 머리 위에 올려두거나</strong> 탕가에 얹어둡니다.<br>
+3. <strong>머리카락 묶기:</strong> 긴 머리는 물에 닿지 않도록 고무줄로 묶어 올려야 합니다.<br>
+4. <strong>문신(타투) 규정:</strong> 일본 온천은 전통적으로 야쿠자와의 연관성 때문에 문신이 있는 고객의 입장을 제한하는 곳이 많습니다. 작은 타투는 방수 스티커나 살색 테이프로 가리고 들어가며, 크기가 큰 경우 프라이빗 가족탕(전세탕)을 예약하는 것을 추천합니다.`,
+    speechText: '일본 온천에 들어갈 때는 반드시 먼저 샤워를 깨끗이 하고 들어가야 합니다. 수건은 물에 담그지 않고 머리 위에 올려두며, 탕 안에서 수영을 하거나 물을 튀기지 않습니다. 문신이 있는 경우 살색 테이프로 가리거나 전세탕을 이용하는 것이 좋습니다.'
+  },
+  {
+    id: 'osaka-vs-tokyo',
+    title: '🚄 오사카(간사이)와 도쿄(간토)의 재미있는 문화 차이',
+    keywords: ['도쿄', '간사이', '간토', '차이', '에스컬레이터', '우동', '국물', '성격'],
+    html: `오사카와 도쿄는 역사와 기질이 달라 여러 방면에서 정반대의 문화를 보여줍니다.<br><br>
+1. <strong>에스컬레이터 서는 위치:</strong><br>
+   - <strong>오사카(간사이): 오른쪽</strong>에 서고, 왼쪽을 급한 사람을 위해 비워둡니다. (1970년 오사카 만국박람회 당시 세계 기준을 따르며 정착)<br>
+   - <strong>도쿄(간토): 왼쪽</strong>에 서고, 오른쪽을 비워둡니다. (과거 칼을 찬 사무라이들이 부딪히지 않기 위해 좌측통행하던 풍습)<br><br>
+2. <strong>우동 국물(다시):</strong><br>
+   - 오사카: <strong>다시마(콘부) 베이스</strong>로 맑고 투명하며 은은한 감칠맛.<br>
+   - 도쿄: <strong>가쓰오부시와 진간장 베이스</strong>로 진하고 어두운 색감.<br><br>
+3. <strong>사람들의 기질:</strong> 도쿄는 조용하고 정중하며 개인적인 분위기인 반면, 오사카는 상인의 도시답게 정이 많고 농담을 좋아하며 처음 보는 사람과도 금방 친구가 되는 활기찬 매력이 있습니다.`,
+    speechText: '오사카와 도쿄는 문화가 매우 다릅니다. 에스컬레이터를 탈 때 오사카는 오른쪽에 서고, 도쿄는 왼쪽에 섭니다. 우동 국물도 오사카는 다시마를 우려낸 맑은 국물인 반면 도쿄는 진한 간장 국물입니다. 오사카 특유의 활기차고 정 많은 상인 기질도 큰 매력입니다.'
+  },
+  {
+    id: 'convenience-store-manner',
+    title: '🏪 일본 편의점 & 계산대 매너: 돈 트레이와 봉투',
+    keywords: ['편의점', '계산', '트레이', '봉투', '돈', '동전', '로손', '세븐일레븐'],
+    html: `일본 편의점(로손, 세븐일레븐, 패밀리마트)과 상점에서 결제할 때 알아두면 좋은 매너입니다.<br><br>
+1. <strong>돈과 카드는 계산 트레이(카센)에 놓기:</strong> 점원의 손에 직접 현금이나 카드를 건네지 않고, 계산대 위 작은 사각 트레이에 올려놓습니다. 이는 잔돈을 명확히 확인하고 상대방과의 불필요한 신체 접촉을 피하는 정중한 배려입니다. 점원도 거스름돈을 줄 때 영수증과 지폐, 동전을 차례대로 트레이나 손바닥에 정성껏 건네줍니다.<br><br>
+2. <strong>비닐봉투 유료화:</strong> 일본은 환경 정책으로 비닐봉투가 2~5엔 유료입니다.<br>
+   - 봉투가 필요할 때: <em>"후쿠로 오네가이시마스 (봉투 부탁합니다)"</em><br>
+   - 봉투가 필요 없을 때: <em>"다이죠부데스 (괜찮습니다)"</em> 또는 <em>"후쿠로와 이리마센 (봉투는 필요 없습니다)"</em>`,
+    speechText: '일본 편의점에서는 현금이나 카드를 점원의 손에 직접 주지 않고 계산대 위 파란 트레이에 올려놓는 것이 예절입니다. 비닐봉투는 유료이므로 필요하지 않다면 다이죠부데스라고 말씀하시면 됩니다.'
+  },
+  {
+    id: 'takoyaki-history',
+    title: '🐙 타코야키의 유래와 오사카인의 소울푸드 이야기',
+    keywords: ['타코야키', '문어', '유래', '아이즈야', '소울푸드', '간식', '밀가루'],
+    html: `오사카 하면 가장 먼저 떠오르는 길거리 음식 <strong>타코야키(たこ焼き)</strong>는 1935년 오사카의 포장마차 '아이즈야(会津屋)'의 창업자 엔도 토메키치가 처음 개발했습니다.<br><br>
+원래는 쇠고기와 곤약을 넣은 '라디오야키'였는데, 효고현 아카시 지방의 문어 요리(아카시야키)에서 영감을 받아 <strong>간장 맛 반죽 속에 큼직한 문어 조각</strong>을 넣어 구운 것이 폭발적인 인기를 끌며 전국으로 퍼져나갔습니다.<br><br>
+오사카 사람들은 <em>"오사카 집에는 집집마다 타코야키 전용 불판이 하나씩 있다"</em>고 말할 정도로 타코야키에 대한 자부심이 대단하며, 주말마다 온 가족이 모여 타코야키 파티(타코파)를 여는 정겨운 문화가 있습니다.`,
+    speechText: '타코야키는 1935년 오사카 아이즈야에서 큼직한 문어를 밀가루 반죽에 넣어 구워낸 것에서 시작되었습니다. 오사카 가정집마다 타코야키 불판이 구비되어 있을 만큼 오사카 사람들의 영혼이 담긴 소울푸드입니다.'
+  },
+  {
+    id: 'okonomiyaki-history',
+    title: '🥞 오코노미야키: 내 취향대로 철판에서 구워 먹는 맛',
+    keywords: ['오코노미야키', '철판', '야키소바', '양배추', '헤라', '취향'],
+    html: `<strong>오코노미야키(お好み焼き)</strong>는 '오코노미(기호, 취향)'와 '야키(구이)'가 결합된 말로, "내가 좋아하는 재료를 마음껏 넣어 철판에 구워 먹는다"는 뜻입니다.<br><br>
+제2차 세계대전 직후 식량이 부족하던 시절, 밀가루 반죽에 값싸고 아삭한 양배추를 듬뿍 넣어 배를 채우던 서민 요리에서 출발했습니다.<br><br>
+<strong>오사카식과 히로시마식의 차이:</strong><br>
+오사카식은 반죽에 양배추, 계란, 삼겹살, 해산물을 <strong>모두 섞어서 두툼하게</strong> 부쳐내며, 전용 작은 뒤집개인 <strong>'헤라(테코)'</strong>로 피자처럼 잘라 뜨거운 철판 위에서 직접 베어 먹는 것이 제맛입니다!`,
+    speechText: '오코노미야키는 좋아하는 재료를 취향껏 철판에 구워 먹는다는 뜻입니다. 오사카식은 양배추와 고기, 해산물을 반죽에 함께 섞어 두툼하게 부쳐내며, 전용 뒤집개인 헤라로 직접 잘라 먹는 재미가 일품입니다.'
+  },
+  {
+    id: 'no-tipping-culture',
+    title: '🪙 일본에 팁(Tip) 문화가 절대 없는 이유',
+    keywords: ['팁', '봉사료', '잔돈', '택시', '호텔', '서비스', '식당'],
+    html: `미국이나 서구권과 달리 일본에는 <strong>팁 문화가 아예 존재하지 않습니다.</strong><br><br>
+식당, 택시, 호텔, 미용실 등 어떤 곳에서도 음식값이나 요금 외에 추가로 돈을 얹어줄 필요가 없습니다. 일본에서는 손님에게 최상의 서비스를 제공하는 것이 직원의 당연한 도리(오모테나시)로 여겨지며, 서비스 비용은 이미 청구된 가격에 정직하게 포함되어 있기 때문입니다.<br><br>
+⚠️ <em>주의:</em> 테이블 위에 호의로 잔돈이나 지폐를 두고 나가면, 점원이 <strong>"손님, 잊고 가신 돈이 있습니다!"</strong>라며 길거리까지 헐레벌떡 뛰어나와 돌려주는 진풍경을 겪게 됩니다. 고마운 마음은 돈 대신 "고치소사마데시타(잘 먹었습니다)"라는 따뜻한 인사말로 전하세요!`,
+    speechText: '일본에는 팁 문화가 전혀 없습니다. 최상의 서비스를 제공하는 것이 당연한 직업 윤리로 여겨지기 때문입니다. 테이블 위에 돈을 두고 나가면 깜빡 잊은 줄 알고 쫓아와 돌려주므로, 잘 먹었다는 따뜻한 말 한마디로 감사를 표현해 주세요.'
+  },
+  {
+    id: 'umeda-sky-building',
+    title: '🏙️ 우메다 스카이빌딩 공중정원의 건축적 비밀',
+    keywords: ['우메다', '스카이빌딩', '공중정원', '전망대', '야경', '건축', '루미스카이'],
+    html: `지상 173m 높이에서 오사카를 내려다보는 <strong>우메다 스카이빌딩</strong>은 세계적인 건축가 하라 히로시가 설계하여 1993년에 완공된 현대 건축의 걸작입니다.<br><br>
+영국의 권위 있는 건축 전문지 타임스가 아테네 파르테논 신전, 로마 콜로세움 등과 함께 <strong>'세계 20대 건축물'</strong> 중 하나로 선정한 바 있습니다.<br><br>
+<strong>건축의 비밀:</strong><br>
+두 개의 초고층 빌딩을 먼저 지은 뒤, 지상에서 미리 완성한 거대한 도넛 모양의 옥상 공중정원을 와이어 크레인으로 들어 올려 꼭대기에 도킹시키는 '리프트업(Lift-up) 공법'으로 지어졌습니다. 밤에는 옥상 바닥에 형광석이 별자리처럼 푸른빛으로 반짝이는 '루미 스카이워크'가 펼쳐져 환상적인 야경을 선사합니다.`,
+    speechText: '우메다 스카이빌딩 공중정원은 두 개의 고층 빌딩 상부를 공중에서 도킹하여 연결한 세계적인 명건축물입니다. 360도 야외 옥상 전망대에서는 오사카 야경을 감상할 수 있으며, 밤에는 발밑 바닥이 별자리처럼 빛납니다.'
+  },
+  {
+    id: 'namba-yasaka-shrine',
+    title: '🦁 난바 야사카 신사: 액운을 삼키는 거대한 사자머리',
+    keywords: ['야사카', '사자머리', '난바', '신사', '포토존', '금전운', '승리'],
+    html: `도톤보리에서 도보 10분 거리의 주택가에 자리 잡은 <strong>난바 야사카 신사(難波八阪神社)</strong>는 오사카 여행객들에게 압도적인 포토존으로 유명합니다.<br><br>
+신사 마당에 들어서면 높이 12미터, 폭 11미터, 깊이 10미터에 달하는 <strong>거대한 황금 눈의 사자머리 무대(시시덴)</strong>가 입을 쩍 벌리고 서 있습니다.<br><br>
+사자가 벌린 거대한 입은 <strong>주변의 모든 사악한 액운과 귀신을 한 번에 집어삼키고, 그 대신 승리와 성공, 금전운(재물복)을 불러온다</strong>는 영험한 믿음이 깃들어 있어 시험 합격이나 사업 번창을 기원하는 참배객들의 발길이 끊이지 않습니다.`,
+    speechText: '난바 야사카 신사는 12미터 높이의 거대한 사자머리 사당으로 유명합니다. 쩍 벌린 사자의 입이 모든 나쁜 액운을 집어삼키고 승리와 재물운을 가져다준다고 하여 사진 명소이자 소원 성취 명소로 큰 사랑을 받고 있습니다.'
+  },
+  {
+    id: 'shitennouji-temple',
+    title: '📿 시텐노지(사천왕사): 1400년 역사의 일본 최초 관립 사찰',
+    keywords: ['시텐노지', '사천왕사', '쇼토쿠', '사찰', '절', '불교', '5층탑'],
+    html: `오사카 텐노지 구에 위치한 <strong>시텐노지(四天王寺)</strong>는 서기 593년, 일본 역사상 가장 존경받는 위인 중 한 명인 <strong>쇼토쿠 태자</strong>가 창건한 일본 최초의 국립(관립) 불교 사찰입니다.<br><br>
+사천왕을 모셔 국가의 평안과 백성의 안녕을 기원하며 세워졌습니다. 1400여 년 동안 수많은 전쟁과 태풍, 공습으로 소실과 재건을 반복했으나, 남대문·중문·5층 목탑·금당·강당이 남북으로 일직선상에 늘어서는 <strong>초기 아스카 시대의 고대 가람 배치 양식</strong>을 완벽하게 계승하고 있습니다.<br><br>
+경내의 거대한 5층 목탑은 계단을 통해 꼭대기까지 직접 걸어 올라가 부처님의 사리를 모신 공간을 친견할 수 있습니다.`,
+    speechText: '시텐노지는 서기 593년 쇼토쿠 태자가 창건한 1400년 역사의 일본 최초 관립 사찰입니다. 남북으로 일직선을 이루는 고대 아스카 시대 가람 배치를 간직하고 있으며, 웅장한 5층 목탑을 직접 감상할 수 있습니다.'
+  },
+  {
+    id: 'osaka-tenmangu',
+    title: '🏮 오사카 텐만구와 일본 3대 축제 텐진마츠리',
+    keywords: ['텐만구', '학문', '스가와라', '텐진마츠리', '마츠리', '축제', '미치자네'],
+    html: `오사카 기타구에 위치한 <strong>오사카 텐만구(大阪天満宮)</strong>는 헤이안 시대의 천재 학자이자 정치가였던 <strong>스가와라 no 미치자네(학문의 신)</strong>를 주신으로 모시는 신사입니다. 입시철이면 일본 전역에서 수험생과 학부모들이 합격 부적(오마모리)을 사기 위해 인산인해를 이룹니다.<br><br>
+<strong>일본 3대 여름 축제, 텐진마츠리:</strong><br>
+매년 7월 24일과 25일에 열리는 텐진마츠리는 1,000년 이상의 역사를 자랑합니다. 3,000명이 넘는 사람들이 화려한 헤이안 시대 복장을 입고 행진하는 육상 행렬과, 해 질 녘 오오카와 강 위에 100여 척의 배가 줄지어 등불을 밝히는 선상 행렬, 밤하늘을 수놓는 5,000여 발의 봉납 불꽃놀이가 어우러지는 오사카 최고의 여름 장관입니다.`,
+    speechText: '오사카 텐만구는 학문의 신 스가와라노 미치자네를 모시는 신사로 수험생들의 필수 방문지입니다. 매년 7월 말 열리는 텐진마츠리는 강 위에 수많은 배와 등불, 불꽃놀이가 어우러지는 일본 3대 전통 축제 중 하나입니다.'
+  },
+  {
+    id: 'kansai-dialect',
+    title: '🗣️ 정겹고 유쾌한 오사카 사투리(간사이벤) 배우기',
+    keywords: ['사투리', '간사이벤', '난데야넹', '오오키니', '혼마', '마이도', '말투'],
+    html: `오사카 사람들은 표준어보다 자신들의 고유한 <strong>간사이벤(関西弁, 오사카 사투리)</strong>을 매우 자랑스럽게 여깁니다. 만담(코미디)의 중심지답게 억양이 리드미컬하고 말끝에 정이 넘쳐납니다.<br><br>
+<strong>여행 중 써먹는 대표 간사이벤 5가지:</strong><br>
+1. <strong>오오키니 (おおきに):</strong> "감사합니다(아리가토)". 상점이나 식당을 나설 때 "오오키니!" 하고 인사하면 사장님이 함박웃음을 짓습니다.<br>
+2. <strong>난데야넹 (なんでやねん):</strong> "왜 그래!", "말도 안 돼!" (상대방의 엉뚱한 농담에 딴지를 거는 오사카의 국민 유행어)<br>
+3. <strong>혼마? (ほんま?):</strong> "진짜? 정말로?" (표준어 '혼토?')<br>
+4. <strong>마이도 (まいど):</strong> "늘 신세 집니다, 안녕하십니까!" (상인들이 손님을 맞이할 때 쓰는 친근한 인사)<br>
+5. <strong>마케테 (まけて):</strong> "좀 깎아주세요!" (오사카 상인과의 정겨운 가격 흥정 단어)`,
+    speechText: '오사카 사투리 간사이벤은 특유의 리듬감과 유쾌함이 특징입니다. 감사합니다를 뜻하는 오오키니, 진짜냐고 묻는 혼마, 농담에 맞받아치는 난데야넹 같은 정겨운 표현을 현지 식당에서 가볍게 써보시면 좋습니다.'
+  },
+  {
+    id: 'kuromon-market',
+    title: '🐟 쿠로몬 시장(흑문시장): 200년 전통 오사카의 부엌',
+    keywords: ['쿠로몬', '흑문시장', '해산물', '와규', '가리비', '시장', '참치'],
+    html: `난바역 동쪽에 위치한 <strong>쿠로몬 시장(黒門市場)</strong>은 에도 시대 후기인 1822년부터 이어져 온 오사카 최대의 전통 재래시장으로, <strong>'오사카의 부엌'</strong>이라는 별명을 갖고 있습니다.<br><br>
+<strong>이름의 유래:</strong><br>
+시장 근처에 있던 유서 깊은 사찰 '엔묘지'에 거대하고 웅장한 검은 산문(黒門, 쿠로몬)이 있었던 것에서 시장 이름이 유래되었습니다.<br><br>
+약 580m 길이의 아케이드 골목에 150여 개의 점포가 줄지어 있으며, 신선한 참치 뱃살(오토로) 초밥, 대왕 가리비 버터구이, 성게알(우니), A5 등급 마블링 와규 꼬치를 눈앞의 철판과 숯불에서 즉석으로 구워 먹을 수 있어 여행객들의 식도락 천국입니다.`,
+    speechText: '쿠로몬 시장은 200년 역사를 자랑하는 오사카의 부엌입니다. 인근 사찰의 검은 문에서 이름이 유래되었으며, 신선한 참치와 와규, 해산물 꼬치를 즉석에서 맛볼 수 있는 대표적인 미식 시장입니다.'
+  },
+  {
+    id: 'chopstick-etiquette',
+    title: '🥢 일본 젓가락(하시) 사용 시 절대 하지 말아야 할 금기',
+    keywords: ['젓가락', '하시', '금기', '식사', '예절', '꽂기', '밥그릇'],
+    html: `일본에서는 식사할 때 숟가락보다 젓가락을 주로 사용하므로, 젓가락에 얽힌 독특한 식사 예절과 금기 사항이 엄격합니다.<br><br>
+<strong>절대 금지 3가지 (장례 의식을 연상시킴):</strong><br>
+1. <strong>하시와타시 (箸渡し):</strong> 젓가락으로 음식을 집어 다른 사람의 젓가락으로 직접 건네받는 행위. (일본 전통 화장터에서 유골을 수습할 때만 행하는 방식이므로 절대 금기)<br>
+2. <strong>츠키하시 (突き立て箸):</strong> 밥공기 한가운데에 젓가락을 수직으로 푹 꽂아두는 행위. (망자의 제사상에 올리는 밥을 연상시킴)<br>
+3. <strong>네부리하시 (ねぶり箸):</strong> 젓가락 끝에 묻은 소스를 쪽쪽 빨아먹는 행위.<br><br>
+💡 <em>바람직한 매너:</em> 국물이 있는 밥그릇이나 국그릇은 한 손으로 들고 입 가까이에 대고 젓가락으로 국물을 마시거나 건더기를 건져 먹는 것이 단정한 예의입니다.`,
+    speechText: '일본에서 젓가락으로 음식을 다른 사람 젓가락에 직접 건네거나, 밥 위에 젓가락을 꽂는 것은 장례식을 연상시키므로 절대 금기입니다. 젓가락을 내려놓을 때는 젓가락 받침대를 사용하고, 그릇을 손에 들고 먹는 것이 예절입니다.'
+  },
+  {
+    id: 'transit-etiquette',
+    title: '🚇 일본 지하철 & 대중교통 이용 에티켓 3대 수칙',
+    keywords: ['지하철', '전철', '매너', '통화', '가방', '백팩', '버스', '매너모드'],
+    html: `오사카의 미도스지선 지하철이나 한큐, 난카이 전철을 이용할 때 지켜야 할 매너입니다.<br><br>
+1. <strong>전철 내 전화 통화 절대 금지:</strong> 차내에서는 휴대전화를 '매너모드'로 설정하고, 통화는 절대 하지 않는 것이 철칙입니다. 전화가 오면 끊거나 문자로 "지금 전철 안입니다"라고 답합니다.<br>
+2. <strong>백팩(가방)은 앞으로 메거나 선반에:</strong> 혼잡한 전철 안에서 등에 멘 커다란 배낭은 뒤사람을 치거나 통행을 방해합니다. 가슴 앞으로 돌려 메거나, 좌석 위 선반에 올리거나, 발밑에 내려놓습니다.<br>
+3. <strong>우선석(노약자석) 부근 전원 주의:</strong> 심장 박동기 등 의료기기에 영향을 줄 수 있어 혼잡 시에는 휴대전화 전원을 끄거나 비행기 모드로 전환하도록 안내 방송이 나옵니다.`,
+    speechText: '일본 지하철에서는 통화가 엄격히 금지되어 있으므로 휴대전화는 매너모드로 해두셔야 합니다. 혼잡한 차내에서는 백팩을 앞으로 메어 다른 승객을 배려하는 것이 중요한 대중교통 매너입니다.'
+  },
+  {
+    id: 'trash-can-reason',
+    title: '🗑️ 일본 길거리에 쓰레기통이 없는 역사적 이유',
+    keywords: ['쓰레기통', '쓰레기', '분리수거', '길거리', '사린가스', '자판기', '페트병'],
+    html: `일본 여행 중 가장 신기한 점 중 하나는 <strong>"길거리가 너무 깨끗한데 쓰레기통은 도무지 찾을 수 없다"</strong>는 것입니다.<br><br>
+<strong>쓰레기통이 사라진 이유:</strong><br>
+1. <strong>1995년 도쿄 지하철 사린가스 테러 사건:</strong> 옴진리교 종교 집단이 지하철 쓰레기통에 독가스를 살포한 끔찍한 사건 이후, 공공장소 테러 물질 은닉을 방지하기 위해 전국의 길거리 쓰레기통을 대대적으로 철거했습니다.<br>
+2. <strong>자기 쓰레기는 자기가 챙기는 시민의식:</strong> 일본인들은 외출 시 작은 비닐봉지를 챙겨 자신의 쓰레기를 가방에 넣어 집에 가져가 분리수거하는 문화가 정착되었습니다.<br><br>
+💡 <em>여행자 꿀팁:</em> 마신 음료 캔이나 페트병은 길거리 곳곳에 있는 <strong>음료 자판기 옆 전용 투입구</strong>에 버리시면 됩니다!`,
+    speechText: '일본 길거리에 쓰레기통이 없는 이유는 1995년 도쿄 지하철 사린 테러 이후 안전을 위해 철거했기 때문입니다. 여행 중 발생한 쓰레기는 호텔로 가져가거나, 음료 캔은 자판기 옆 재활용 수거함에 버리시면 됩니다.'
+  },
+  {
+    id: 'coin-wallet-essential',
+    title: '👛 일본 여행 시 칸 나뉜 동전 지갑이 필수인 이유',
+    keywords: ['동전', '지갑', '소비세', '1엔', '5엔', '100엔', '잔돈', '현금'],
+    html: `일본은 신용카드 사용이 늘었지만, 여전히 전통 맛집, 자판기, 신사, 코인 로커 등에서 <strong>현금 동전</strong>이 매우 많이 사용됩니다.<br><br>
+<strong>동전이 폭발적으로 늘어나는 이유:</strong><br>
+일본의 지폐는 1,000엔부터 시작하며, 1엔, 5엔, 10엔, 50엔, 100엔, 500엔까지 무려 <strong>6종류의 동전</strong>이 존재합니다. 여기에 일본의 소비세(식품 8%, 일반 10%)가 붙어 108엔, 324엔처럼 끝자리가 떨어지면서 잔돈이 쏟아져 나옵니다.<br><br>
+💡 <em>꿀팁:</em> 1엔, 10엔, 100엔 등 칸이 분리된 전용 동전 지갑을 챙기시면 계산대 앞에서 허둥대지 않고 현지인처럼 빠르게 계산할 수 있습니다!`,
+    speechText: '일본은 1000엔 미만이 모두 6종류의 동전으로 되어 있고 소비세가 붙기 때문에 잔돈이 많이 생깁니다. 칸이 나뉜 동전 지갑을 챙기시면 식당과 편의점에서 빠르고 편리하게 계산할 수 있습니다.'
+  },
+  {
+    id: 'vending-machine-paradise',
+    title: '🥤 자판기 천국 일본: 따뜻한 빨강과 차가운 파랑',
+    keywords: ['자판기', '음료', '빨강', '파랑', '콘스프', '앗타카이', '츠메타이'],
+    html: `일본은 인구 30명당 1대꼴로 자판기가 보급되어 있는 세계 제1의 '자판기 왕국'입니다.<br><br>
+<strong>버튼 색상의 비밀:</strong><br>
+- <strong>파란색 버튼 (つめたい, 츠메타이):</strong> 얼음장처럼 시원한 차가운 음료.<br>
+- <strong>빨간색 버튼 (あたたかい, 앗타카이):</strong> 캔을 쥐었을 때 손난로처럼 따뜻한 온음료.<br><br>
+가을과 겨울에는 커피뿐만 아니라 <strong>따끈따끈한 옥수수 콘스프 캔, 팥죽(시루코), 된장국(미소시루)</strong>까지 자판기에서 따뜻하게 뽑아 마실 수 있어 추위를 녹여주는 최고의 여행 동반자입니다!`,
+    speechText: '일본은 어디서나 자판기를 만날 수 있는 자판기 천국입니다. 파란 버튼은 시원한 음료, 빨간 버튼은 따뜻한 음료를 뜻합니다. 겨울철에는 따뜻한 커피뿐 아니라 옥수수 콘스프와 단팥죽까지 자판기에서 즐기실 수 있습니다.'
+  },
+  {
+    id: 'denden-town-subculture',
+    title: '🎮 닛폰바시 덴덴타운: 서일본 최대의 서브컬처 성지',
+    keywords: ['덴덴타운', '닛폰바시', '피규어', '애니', '오타쿠', '건담', '전자상가'],
+    html: `도쿄에 아키하바라가 있다면, 오사카에는 <strong>덴덴타운(でんでんタウン)</strong>이 있습니다!<br><br>
+난바역과 닛폰바시역 남쪽에 펼쳐진 전자상가 거리로, 원래는 라디오 부품과 가전제품을 파는 거리였으나 현재는 <strong>피규어, 건담 프라모델, 레트로 게임팩, 코스프레, 가챠퐁 캡슐토이, 메이드 카페</strong>가 밀집한 서일본 최고의 오타쿠 성지가 되었습니다.<br><br>
+아키하바라보다 가격대가 저렴하고 희귀한 고전 애니메이션 굿즈나 중고 게임기를 발굴하는 재미가 쏠쏠해 전 세계 매니아들의 발길이 끊이지 않습니다.`,
+    speechText: '덴덴타운은 도쿄 아키하바라와 어깨를 나란히 하는 서일본 최고의 애니메이션 및 전자상가 성지입니다. 정교한 피규어부터 레트로 비디오 게임, 굿즈까지 매니아들을 위한 천국 같은 곳입니다.'
+  },
+  {
+    id: 'donki-tax-free',
+    title: '🐧 돈키호테 & 드럭스토어 10% 면세(Tax-Free) 꿀팁',
+    keywords: ['돈키호테', '면세', '쇼핑', '여권', '드럭스토어', '할인', '소비세'],
+    html: `오사카 도톤보리의 거대 관람차가 달린 돈키호테나 마츠모토 키요시 등에서 쇼핑할 때 필수 체크 사항입니다.<br><br>
+<strong>면세(Tax-Free) 받는 법:</strong><br>
+1. <strong>여권 필수 지참:</strong> 본인의 실물 여권(사본 불가)을 반드시 제시해야 합니다.<br>
+2. <strong>금액 기준:</strong> 동일 매장에서 하루 결제 금액이 <strong>세금 제외 5,000엔 이상</strong>일 때 10% 소비세 전액이 즉시 면세됩니다.<br>
+3. <strong>면세 물품 밀봉 봉투:</strong> 화장품, 의약품, 간식 등 소모품은 특수 비닐에 밀봉되며, <strong>"일본 출국 전까지 국내에서 개봉하여 사용하지 않는다"</strong>는 조건이 붙습니다. 귀국하기 전에 일본 내에서 드실 간식은 일반 결제로 따로 나누어 계산하셔야 합니다.`,
+    speechText: '돈키호테와 드럭스토어에서는 세금 제외 5000엔 이상 구매 시 실물 여권을 제시하면 10퍼센트 면세 혜택을 받으실 수 있습니다. 면세 처리된 물품은 일본 출국 전까지 뜯지 않아야 하므로 바로 드실 간식은 따로 결제하세요.'
+  },
+  {
+    id: 'tonkatsu-cabbage',
+    title: '🥩 돈카츠 옆에 채 썬 양배추가 산더미로 나오는 이유',
+    keywords: ['돈카츠', '돈까스', '양배추', '비타민', '소화', '리필'],
+    html: `일본 돈카츠 전문점에 가면 바삭한 돈카츠 옆에 채 썬 양배추가 산처럼 수북하게 나오는 모습을 보게 됩니다.<br><br>
+<strong>영양학적 지혜와 소화의 비밀:</strong><br>
+1. <strong>천연 소화제 비타민 U:</strong> 양배추에는 위장 점막을 보호하고 재생하는 비타민 U와 식이섬유가 풍부하여, 기름에 튀긴 고기를 먹을 때 생기는 위산 과다와 더부룩함을 말끔히 예방해 줍니다.<br>
+2. <strong>입안을 개운하게:</strong> 기름진 돈카츠 한 점에 참깨 드레싱이나 유자 폰즈 소스를 뿌린 아삭한 양배추를 곁들이면 느끼함이 싹 가십니다.<br><br>
+💡 대부분의 정통 돈카츠 집에서는 밥, 장국, 그리고 <strong>양배추 리필이 무료(오카와리 무료)</strong>이므로 마음껏 곁들여 드셔도 좋습니다!`,
+    speechText: '돈카츠 옆에 채 썬 양배추가 나오는 이유는 양배추의 비타민 U 성분이 기름진 튀김 음식의 소화를 돕고 위벽을 보호해 주기 때문입니다. 대부분의 가게에서 양배추는 무료 리필이 가능합니다.'
+  },
+  {
+    id: 'midosuji-subway',
+    title: '🚇 빨간색 1호선 미도스지선: 오사카 지하철의 대동맥',
+    keywords: ['미도스지', '지하철', '우메다', '난바', '텐노지', '신오사카', '1호선'],
+    html: `오사카 여행 중 가장 많이 타게 되는 <strong>빨간색 노선 미도스지선(御堂筋線)</strong>은 1933년에 개통된 오사카 최초이자 일본 최초의 공영 지하철입니다.<br><br>
+신칸센이 서는 <strong>신오사카역</strong>부터 시작하여, 북쪽의 번화가 <strong>우메다</strong>, 중심 상업지구 <strong>혼마치</strong>, 젊음의 거리 <strong>신사이바시 & 난바</strong>, 그리고 남쪽의 <strong>텐노지</strong>까지 오사카의 핵심 남북 축을 직선으로 완벽하게 관통합니다.<br><br>
+승강장이 고풍스럽고 천장이 돔형으로 높게 설계되어 있어 오사카 근대 건축의 웅장함을 느낄 수 있는 대표적인 노선입니다.`,
+    speechText: '빨간색 미도스지선은 1933년 개통된 오사카 최초의 지하철로 오사카 교통의 핵심 대동맥입니다. 신오사카, 우메다, 신사이바시, 난바, 텐노지를 한 번에 이어주어 여행 시 가장 유용한 노선입니다.'
+  },
+  {
+    id: 'ramen-slurping',
+    title: '🍜 라멘 면발을 후루룩 소리 내어 먹는 이유',
+    keywords: ['라멘', '면', '소리', '후루룩', '즈루즈루', '국물', '에티켓'],
+    html: `서양 식사 예절에서는 소리 내어 음식을 먹는 것이 금기이지만, 일본 라멘집이나 메밀소바 집에서는 <strong>"후루룩! 쯧쯧!" (즈루즈루)</strong> 소리를 내며 면을 들이마시는 사람들을 흔히 봅니다.<br><br>
+<strong>소리를 내는 2가지 과학적 이유:</strong><br>
+1. <strong>향을 극대화(에어로졸 효과):</strong> 면과 함께 공기를 강하게 들이마시면 코로 라멘 국물의 깊은 육수 향이 퍼지며 미각과 후각을 동시에 자극해 맛이 훨씬 풍부해집니다.<br>
+2. <strong>뜨거운 면 식히기:</strong> 펄펄 끓는 뜨거운 면발을 공기와 함께 빠르게 흡입하여 입안을 데이지 않고 맛있게 즐길 수 있습니다.<br>
+3. <strong>주방장에 대한 최고의 찬사:</strong> <em>"소리 날 만큼 너무 맛있게 잘 먹고 있다"</em>는 긍정적인 신호로 여겨집니다.`,
+    speechText: '일본에서 라멘이나 소바를 후루룩 소리 내어 먹는 것은 면과 공기를 함께 들이마셔 향을 극대화하고 면을 식히는 전통 방식입니다. 주방장에게 음식이 맛있다는 찬사의 의미도 담겨 있습니다.'
+  },
+  {
+    id: 'matcha-culture',
+    title: '🍵 일본의 맛차(말차)와 다도 문화: 일기일회(一期一会)',
+    keywords: ['맛차', '말차', '녹차', '다도', '우지', '일기일회', '전통차'],
+    html: `오사카 근교의 교토 '우지(宇治)'는 일본 최고 품질의 녹차와 맛차 산지입니다. 찻잎을 쪄서 말린 후 맷돌로 곱게 갈아낸 초록빛 가루를 거품 내어 마시는 것이 <strong>맛차(抹茶)</strong>입니다.<br><br>
+<strong>다도의 정신, 일기일회(一期一会, 이치고이치에):</strong><br>
+16세기 오사카 사카이 출신의 다도 대가 <strong>센노 리큐</strong>가 정립한 다도 철학의 핵심입니다.<br>
+<em>"지금 마주한 이 차 한 잔과 만남은 내 평생 단 한 번뿐인 소중한 인연이다."</em>라는 뜻으로, 상대방을 위해 정성을 다해 차를 대접하는 마음가짐입니다. 쌉싸름한 차를 마시기 전에 먼저 달콤한 화과자(와가시)를 입에 물어 쓴맛과 단맛의 조화를 즐기는 것이 정통 음용법입니다.`,
+    speechText: '일본의 맛차 문화는 평생 단 한 번뿐인 인연을 소중히 여긴다는 일기일회의 다도 정신에 뿌리를 두고 있습니다. 쌉싸름한 말차를 마시기 전 달콤한 전통 과자를 곁들이면 조화로운 풍미를 느끼실 수 있습니다.'
+  },
+  {
+    id: 'nakanoshima-hall',
+    title: '🏛️ 나카노시마와 오사카 중앙공회당: 상인 정신의 상징',
+    keywords: ['나카노시마', '공회당', '중앙공회당', '근대건축', '강', '상인', '기부'],
+    html: `오사카 시내를 흐르는 도지마강과 도사보리강 사이에 떠 있는 모래톱 섬 <strong>나카노시마(中之島)</strong>는 오사카의 행정, 문화, 예술의 중심지입니다.<br><br>
+이곳의 상징인 붉은 벽돌의 <strong>오사카시 중앙공회당</strong>은 1918년에 지어진 네오 르네상스 양식의 국가 중요문화재입니다.<br><br>
+<strong>오사카 상인의 위대한 유산:</strong><br>
+이 화려한 공회당은 공공 세금이 아니라, 오사카의 주식 중개인이었던 상인 <strong>이와모토 에이노스케</strong>가 거액의 사재 100만 엔(현재 가치 수백억 원)을 사회에 쾌척하여 지어졌습니다. 공공을 위해 아낌없이 부를 베풀었던 오사카 상인들의 자랑스러운 기부 문화가 살아 숨 쉬는 곳입니다.`,
+    speechText: '나카노시마에 위치한 붉은 벽돌의 오사카 중앙공회당은 국가 중요문화재입니다. 오사카 상인이었던 이와모토 에이노스케의 자발적인 기부금으로 세워진 건물로, 공공을 위하는 오사카 상인 정신의 대표적인 상징입니다.'
+  },
+  {
+    id: 'osaka-expo-tower',
+    title: '☀️ 1970 오사카 만국박람회와 신비로운 태양의 탑',
+    keywords: ['엑스포', '만박', '태양의탑', '오카모토', '공원', '박람회', '1970'],
+    html: `오사카 북부 만박기념공원에 우뚝 솟아 있는 거대한 조형물 <strong>'태양의 탑(太陽の塔)'</strong>은 1970년 아시아 최초로 열렸던 <strong>오사카 만국박람회(EXPO \'70)</strong>의 상징 조형물입니다.<br><br>
+일본의 전설적인 전위 예술가 <strong>오카모토 타로</strong>가 디자인한 높이 70m의 거대 조각으로, 3개의 얼굴을 갖고 있습니다.<br>
+1. 꼭대기의 황금 가면: 빛나는 미래를 상징<br>
+2. 정면 몸통의 태양 얼굴: 생동하는 현재를 상징<br>
+3. 뒷면의 검은 태양: 근원적인 과거를 상징<br><br>
+2025년 오사카·간사이 엑스포 개최를 계기로 다시금 전 세계적인 주목을 받고 있는 오사카의 대표 예술 유산입니다.`,
+    speechText: '만박기념공원의 태양의 탑은 1970년 아시아 최초 오사카 엑스포를 위해 세워진 70미터 높이의 전설적인 예술 건축물입니다. 과거, 현재, 미래를 상징하는 세 개의 얼굴을 지니고 있으며 깊은 영감을 줍니다.'
+  },
+  {
+    id: 'sake-beer-pouring',
+    title: '🍶 일본 술자리 에티켓: 상대방 잔 채워주기(오샤쿠)',
+    keywords: ['사케', '맥주', '술자리', '오샤쿠', '예절', '건배', '잔'],
+    html: `일본 동료나 친구와 술자리를 가질 때 지켜야 할 매너입니다.<br><br>
+1. <strong>자작보다 서로 따라주기 (오샤쿠, お酌):</strong> 일본에서는 혼자 자기 잔을 채우는 것보다 상대방의 잔이 비었을 때 술을 권하며 채워주는 것을 정다운 배려로 여깁니다. 상대방 잔이 3분의 1 이하로 줄어들면 "오히토츠 이카가데스카(한잔 더 어떠세요?)" 하고 권해보세요.<br>
+2. <strong>술을 받을 때의 자세:</strong> 술을 따라줄 때는 잔을 테이블에 그대로 두지 않고, <strong>한 손으로 잔을 들고 다른 한 손으로 잔 밑바닥을 가볍게 받쳐주는 것</strong>이 정중한 예절입니다.<br>
+3. <strong>첫 잔은 다 함께 건배 (간파이, 乾杯):</strong> 주문한 음료가 모두 나오고 나면 잔을 부딪히며 "간파이!"를 외친 후 함께 마시기 시작합니다.`,
+    speechText: '일본 술자리에서는 서로 잔을 채워주는 배려 문화가 있습니다. 술을 받을 때는 두 손으로 잔을 살짝 받쳐 들고, 첫 잔은 모두가 잔을 채운 후 간파이라는 구호와 함께 동시에 건배를 합니다.'
+  },
+  {
+    id: 'hozenji-yokocho',
+    title: '🏮 도톤보리 뒷골목 호젠지 요코초와 물 뿌리는 부동명왕',
+    keywords: ['호젠지', '요코초', '부동명왕', '물', '이끼', '골목', '소원'],
+    html: `화려하고 번쩍이는 도톤보리 메인 거리에서 불과 1분만 골목 안으로 들어가면, 에도 시대의 운치 있는 돌바닥 골목 <strong>호젠지 요코초(法善寺横丁)</strong>가 나타납니다.<br><br>
+골목 중심에 위치한 작은 사찰 호젠지에는 전신이 짙푸른 초록빛 이끼로 뒤덮인 신비로운 불상 <strong>'미즈카케 후도손(水掛け不動尊)'</strong>이 모셔져 있습니다.<br><br>
+<strong>소원 비는 방법:</strong><br>
+바가지로 우물물을 떠서 불상 위에 세 번 시원하게 끼얹으며 소원을 빕니다. 한 어머니가 아들의 건강을 빌며 정성껏 물을 뿌리기 시작한 것이 유래가 되어, 수십 년 동안 수많은 사람들의 소원과 물길이 모여 불상 전체가 부드러운 초록 이끼 옷을 입게 된 감동적인 명소입니다.`,
+    speechText: '호젠지 요코초는 도톤보리 뒤편의 고즈넉한 돌바닥 골목입니다. 이곳 사찰의 부동명왕 불상에 시원한 물을 끼얹으며 소원을 비는 전통이 있어, 불상 온몸이 푸른 이끼로 아름답게 뒤덮여 있습니다.'
+  },
+  {
+    id: 'onigiri-wrapping',
+    title: '🍙 일본 편의점 삼각김밥(오니기리) 바삭하게 뜯는 1-2-3 법칙',
+    keywords: ['삼각김밥', '오니기리', '편의점', '뜯는법', '김', '테이프'],
+    html: `일본 편의점의 삼각김밥(오니기리)은 밥과 바삭한 김 사이에 얇은 비닐이 들어있어 뜯는 번호 순서를 잘 지켜야 김이 찢어지지 않습니다.<br><br>
+<strong>실패 없는 1-2-3 뜯기 순서:</strong><br>
+1. <strong>가운데 빨간 라벨 1번:</strong> 위쪽 꼭짓점의 테이프를 잡고 <strong>아래쪽 끝까지 쭉 당긴 뒤 뒷면까지</strong> 한 바퀴 빙 돌려 완전히 뜯어냅니다.<br>
+2. <strong>우측 2번 모서리:</strong> 오른쪽 모서리 비닐을 바깥쪽으로 부드럽게 쏙 잡아당겨 벗깁니다.<br>
+3. <strong>좌측 3번 모서리:</strong> 김이 흐트러지지 않도록 살짝 쥐고 왼쪽 모서리 비닐을 쏙 잡아당겨 벗겨내면 갓 구운 듯 바삭바삭한 김이 밥을 완벽하게 감쌉니다!`,
+    speechText: '일본 편의점 삼각김밥은 번호 순서대로 뜯어야 김이 찢어지지 않습니다. 가운데 일 번 테이프를 아래로 당겨 뒤쪽까지 완전히 가른 다음, 오른쪽 이번과 왼쪽 삼번 모서리를 차례로 벗겨내시면 됩니다.'
+  }
+];
+
+// 전역 문화 가이드 상태
+let cultureGuideState = {
+  activeSpeechText: '',
+  activeTitle: '',
+  isSpeaking: false,
+  recognition: null,
+  isListening: false
+};
+
+function initCultureGuide() {
+  const micBtn = document.getElementById('culture-mic-btn');
+  const queryInput = document.getElementById('culture-query-input');
+  const askBtn = document.getElementById('culture-ask-btn');
+  const ttsBtn = document.getElementById('culture-tts-btn');
+  const copyBtn = document.getElementById('culture-copy-btn');
+  const chipBtns = document.querySelectorAll('.culture-chip-btn');
+
+  // 1. 추천 질문 칩 클릭 이벤트 연동
+  chipBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const q = btn.getAttribute('data-query');
+      if (q) {
+        if (queryInput) queryInput.value = q;
+        processCultureQuery(q);
+      }
+    });
+  });
+
+  // 2. 질문하기 버튼 클릭
+  if (askBtn) {
+    askBtn.addEventListener('click', () => {
+      const q = queryInput ? queryInput.value.trim() : '';
+      if (!q) {
+        showToast('💡 궁금한 질문을 입력하거나 마이크로 말씀하세요!');
+        if (queryInput) queryInput.focus();
+        return;
+      }
+      processCultureQuery(q);
+    });
+  }
+
+  // 3. 엔터 키 입력 시 질문 실행
+  if (queryInput) {
+    queryInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const q = queryInput.value.trim();
+        if (q) processCultureQuery(q);
+      }
+    });
+  }
+
+  // 4. 음성 마이크 STT 버튼 연동
+  if (micBtn) {
+    micBtn.addEventListener('click', () => {
+      toggleCultureSpeechRecognition();
+    });
+  }
+
+  // 5. 음성으로 해설 듣기 TTS 버튼 연동
+  if (ttsBtn) {
+    ttsBtn.addEventListener('click', () => {
+      toggleCultureTts();
+    });
+  }
+
+  // 6. 해설 복사 버튼 연동
+  if (copyBtn) {
+    copyBtn.addEventListener('click', () => {
+      copyCultureGuideAnswer();
+    });
+  }
+
+  // 초기 기본값 설정
+  if (cultureKnowledgeBase.length > 0) {
+    cultureGuideState.activeTitle = cultureKnowledgeBase[0].title;
+    cultureGuideState.activeSpeechText = cultureKnowledgeBase[0].speechText;
+  }
+}
+
+// 음성 질문 인식 (STT) 시작 / 중지 토글
+function toggleCultureSpeechRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    showToast('⚠️ 현재 브라우저는 마이크 음성 인식을 지원하지 않습니다. Chrome을 권장합니다.');
+    return;
+  }
+
+  const micBtn = document.getElementById('culture-mic-btn');
+  const statusBox = document.getElementById('culture-mic-status');
+  const statusText = document.getElementById('culture-mic-status-text');
+  const queryInput = document.getElementById('culture-query-input');
+
+  if (cultureGuideState.isListening && cultureGuideState.recognition) {
+    try {
+      cultureGuideState.recognition.stop();
+    } catch(e) {}
+    return;
+  }
+
+  try {
+    const recognition = new SpeechRecognition();
+    cultureGuideState.recognition = recognition;
+    recognition.lang = 'ko-KR';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onstart = () => {
+      cultureGuideState.isListening = true;
+      if (micBtn) micBtn.classList.add('recording');
+      if (statusBox) statusBox.style.display = 'block';
+      if (statusText) statusText.innerText = '🎙️ 질문을 듣고 있습니다... 편하게 말씀하세요!';
+      showToast('🎙️ 질문을 말씀해 주세요...');
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      if (transcript && transcript.trim()) {
+        if (queryInput) queryInput.value = transcript;
+        showToast('✨ 음성 인식 완료: "' + transcript + '"');
+        processCultureQuery(transcript);
+      }
+    };
+
+    recognition.onerror = (err) => {
+      console.warn('Culture STT Error:', err);
+      showToast('⚠️ 음성을 명확히 듣지 못했습니다. 다시 시도해 주세요.');
+    };
+
+    recognition.onend = () => {
+      cultureGuideState.isListening = false;
+      if (micBtn) micBtn.classList.remove('recording');
+      if (statusBox) statusBox.style.display = 'none';
+    };
+
+    recognition.start();
+  } catch (err) {
+    console.error('Culture Recognition Start Error:', err);
+    showToast('⚠️ 마이크를 시작할 수 없습니다.');
+    cultureGuideState.isListening = false;
+    if (micBtn) micBtn.classList.remove('recording');
+    if (statusBox) statusBox.style.display = 'none';
+  }
+}
+
+// 지식 검색 및 스마트 답변 생성 엔진
+function findCultureAnswer(query) {
+  if (!query || typeof query !== 'string') return cultureKnowledgeBase[0];
+  const q = query.toLowerCase().replace(/[^a-zA-Z0-9가-힣\s]/g, ' ').trim();
+  const qTokens = q.split(/\s+/).filter(t => t.length > 0);
+
+  let bestMatch = null;
+  let highestScore = 0;
+
+  for (const item of cultureKnowledgeBase) {
+    let score = 0;
+    // 1. 키워드 완전/부분 매칭 점수
+    for (const kw of item.keywords) {
+      const kwLower = kw.toLowerCase();
+      if (q.includes(kwLower)) {
+        score += 10;
+      }
+      for (const token of qTokens) {
+        if (token.length >= 2 && (kwLower.includes(token) || token.includes(kwLower))) {
+          score += 4;
+        }
+      }
+    }
+    // 2. 제목 매칭 점수
+    if (item.title.toLowerCase().includes(q)) {
+      score += 15;
+    }
+    for (const token of qTokens) {
+      if (token.length >= 2 && item.title.toLowerCase().includes(token)) {
+        score += 3;
+      }
+    }
+
+    if (score > highestScore) {
+      highestScore = score;
+      bestMatch = item;
+    }
+  }
+
+  // 매칭된 항목이 있는 경우 반환
+  if (bestMatch && highestScore >= 4) {
+    return bestMatch;
+  }
+
+  // 매칭 점수가 낮은 경우 일반 질문에 대한 지능형 친절 해설 제공
+  return {
+    id: 'custom-guide-' + Date.now(),
+    title: `💡 오사카 AI 도슨트: "${escapeHtml(query)}" 안내`,
+    html: `오사카와 일본 문화에 대해 질문해 주신 <strong>"${escapeHtml(query)}"</strong>에 대해 안내해 드립니다.<br><br>
+오사카는 과거부터 일본의 물류와 상업을 주도해 온 <strong>'천하의 부엌(天下の台所)'</strong>으로 불리며, 타인을 먼저 배려하고 융통성 있게 소통하는 따뜻한 상인 문화가 깊게 자리 잡고 있습니다.<br><br>
+여행 중 현지인을 대할 때는 항상 눈을 마주치며 가벼운 목례와 함께 <strong>"스미마센(실례합니다/감사합니다)"</strong>, <strong>"아리가토 고자이마스(대단히 감사합니다)"</strong>를 생활화하시면 어디서나 환한 미소와 친절한 대접을 받으실 수 있습니다.<br><br>
+더 구체적인 내용이 궁금하시다면 상단의 <em>🏯 오사카성 역사</em>, <em>⛩️ 신사 참배 & 손 씻기</em>, <em>🏃 글리코상 유래</em>, <em>🍢 오토시 문화</em> 칩을 터치해 보세요!`,
+    speechText: `${query}에 대해 안내해 드립니다. 오사카는 인정과 실용성을 가장 소중히 여기는 상인의 도시입니다. 스미마센과 아리가토 고자이마스 같은 공손한 인사말을 자주 건네시면 현지인들의 따뜻한 배려와 친절을 느끼실 수 있습니다.`
+  };
+}
+
+// 질문 처리 메인 프로세서
+function processCultureQuery(query) {
+  const item = findCultureAnswer(query);
+  const titleEl = document.getElementById('culture-res-title');
+  const bodyEl = document.getElementById('culture-res-body');
+  const timeEl = document.getElementById('culture-result-time');
+  const resultCard = document.getElementById('culture-guide-result');
+
+  if (titleEl) titleEl.innerHTML = item.title;
+  if (bodyEl) bodyEl.innerHTML = item.html;
+  if (timeEl) {
+    const now = new Date();
+    const timeStr = (now.getHours() < 12 ? '오전 ' : '오후 ') + (now.getHours() % 12 || 12) + ':' + String(now.getMinutes()).padStart(2, '0');
+    timeEl.innerText = timeStr + ' 답변';
+  }
+
+  cultureGuideState.activeTitle = item.title;
+  cultureGuideState.activeSpeechText = item.speechText;
+
+  // 카드 부드러운 포커스
+  if (resultCard) {
+    resultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  showToast('🏛️ AI 가이드 해설이 준비되었습니다!');
+}
+
+// 음성 낭독 (TTS) 토글
+function toggleCultureTts() {
+  const ttsBtn = document.getElementById('culture-tts-btn');
+  const ttsText = document.getElementById('culture-tts-btn-text');
+
+  if (cultureGuideState.isSpeaking) {
+    // 낭독 정지
+    if ('speechSynthesis' in window) {
+      try { window.speechSynthesis.cancel(); } catch(e) {}
+    }
+    cultureGuideState.isSpeaking = false;
+    state.isSpeakingNow = false;
+    if (ttsBtn) ttsBtn.classList.remove('speaking');
+    if (ttsText) ttsText.innerText = '음성으로 해설 듣기';
+    showToast('⏹️ 음성 해설을 정지했습니다.');
+    return;
+  }
+
+  const textToSpeak = cultureGuideState.activeSpeechText || '해설 내용이 없습니다.';
+  if (ttsBtn) ttsBtn.classList.add('speaking');
+  if (ttsText) ttsText.innerText = '⏹️ 낭독 정지';
+  cultureGuideState.isSpeaking = true;
+
+  speakText(textToSpeak, 'ko', () => {
+    cultureGuideState.isSpeaking = false;
+    if (ttsBtn) ttsBtn.classList.remove('speaking');
+    if (ttsText) ttsText.innerText = '음성으로 해설 듣기';
+  });
+}
+
+// 해설 복사하기
+function copyCultureGuideAnswer() {
+  const bodyEl = document.getElementById('culture-res-body');
+  const titleEl = document.getElementById('culture-res-title');
+  if (!bodyEl) return;
+
+  const titleText = titleEl ? titleEl.innerText.trim() + '\n\n' : '';
+  const plainText = titleText + bodyEl.innerText.trim() + '\n\n[출처: OsakaGo 오사카 역사 & 문화 AI 가이드]';
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(plainText).then(() => {
+      showToast('📋 해설이 클립보드에 복사되었습니다!');
+    }).catch(() => {
+      fallbackCopy(plainText);
+    });
+  } else {
+    fallbackCopy(plainText);
+  }
+
+  function fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try {
+      document.execCommand('copy');
+      showToast('📋 해설이 복사되었습니다!');
+    } catch (e) {
+      showToast('⚠️ 복사에 실패했습니다.');
+    }
+    document.body.removeChild(ta);
+  }
+}
+
