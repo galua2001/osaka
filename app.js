@@ -576,24 +576,11 @@ function startDualTurn(speakerLang) {
   rec.lang = speakerLang === 'ko' ? 'ko-KR' : 'ja-JP';
 
   let hasExecutedTranslation = false;
+  let dualFinalTranscript = '';
 
   // 번역 실행 헬퍼 (중복 실행 방지)
   async function triggerTranslation(text) {
-    let cleanText = (text || '').trim();
-    function removeStutterWords(str) {
-      if (!str) return str;
-      const words = str.trim().split(/\s+/);
-      const stripPunc = (s) => s.replace(/[.,?!~요다까]/g, '');
-      for (let len = Math.floor(words.length / 2); len >= 1; len--) {
-          const firstHalf = words.slice(0, len).join('');
-          const secondHalf = words.slice(len, len * 2).join('');
-          if (stripPunc(firstHalf) === stripPunc(secondHalf)) {
-              return words.slice(len).join(' ');
-          }
-      }
-      return str;
-    }
-    cleanText = removeStutterWords(cleanText);
+    const cleanText = (text || '').trim();
 
     if (hasExecutedTranslation || !cleanText) return;
     hasExecutedTranslation = true;
@@ -605,7 +592,6 @@ function startDualTurn(speakerLang) {
 
     try { rec.stop(); } catch (e) {}
 
-    const cleanText = text.trim();
     const inputEl = document.getElementById('source-text');
     if (inputEl) inputEl.value = cleanText;
 
@@ -651,48 +637,31 @@ function startDualTurn(speakerLang) {
   };
 
   rec.onresult = (event) => {
-    let currentText = '';
-    let isFinal = false;
-
-    const stripPunc = (s) => s.replace(/[.,?!~요다까]/g, '').trim();
-    for (let i = 0; i < event.results.length; ++i) {
-      let chunk = event.results[i][0].transcript;
-      
-      let rawChunk = chunk.trim();
-      let rawFull = currentText.trim();
-      let cleanChunk = stripPunc(rawChunk);
-      let cleanFull = stripPunc(rawFull);
-      
-      if (cleanFull && cleanChunk.startsWith(cleanFull)) {
-        currentText = chunk;
-      } else if (cleanFull && cleanFull.endsWith(cleanChunk)) {
-        // 무시
+    let interimTranscript = '';
+    for (let i = event.resultIndex; i < event.results.length; ++i) {
+      const result = event.results[i];
+      const transcript = result[0] ? result[0].transcript : '';
+      if (result.isFinal) {
+        dualFinalTranscript += transcript;
       } else {
-        currentText += chunk;
+        interimTranscript += transcript;
       }
-      
-      if (event.results[i].isFinal) isFinal = true;
     }
 
+    const currentText = (dualFinalTranscript + interimTranscript).trim();
     if (currentText) {
       recognizedTextBuffer = currentText;
       const inputEl = document.getElementById('source-text');
       if (inputEl) inputEl.value = currentText;
       updateMonitorUI('listening', '말씀 감지됨! 👂', `인식 중: "${currentText}"`);
 
-      // ⏱️ 묵음 자동 감지 타이머 (0.75초간 말이 멈추면 isFinal 상관없이 100% 즉시 번역 트리거)
+      // ⏱️ 묵음 자동 감지 타이머 (0.8초간 말이 멈추면 100% 즉시 번역 트리거)
       if (speechSilenceTimer) clearTimeout(speechSilenceTimer);
       speechSilenceTimer = setTimeout(() => {
         if (!hasExecutedTranslation && recognizedTextBuffer.trim()) {
           triggerTranslation(recognizedTextBuffer);
         }
-      }, 750);
-    }
-
-    // 최종 결과가 나왔을 때 즉시 번역
-    if (isFinal && currentText.trim()) {
-      if (speechSilenceTimer) clearTimeout(speechSilenceTimer);
-      triggerTranslation(currentText);
+      }, 800);
     }
   };
 
@@ -1949,8 +1918,12 @@ function addHistoryItem(sourceText, targetText, sl, tl) {
 let voiceTurnRec = null;
 let activeVoiceSpeaker = null; // 'ko' | 'ja' | null
 let voiceTurnBuffer = '';
+let voiceTurnFinalBuffer = ''; // isFinal로 확정된 음성 텍스트 누적 버퍼
 let voiceSilenceTimer = null;
-let isTranslatingVoiceTurn = false;
+let isTranslatingVoiceTurn = false; // 번역 진행 중 중복 호출 방지 락
+let isVoiceTurnDispatched = false; // 세션당 1회 번역 트리거 보장 플래그
+let lastRequestedText = '';
+let lastRequestedTimestamp = 0;
 let lastTranslatedText = '';
 let lastTranslatedLang = 'ja';
 let lastOriginalText = '';
@@ -1978,7 +1951,7 @@ function startVoiceTurn(speakerLang) {
     if (micModal) {
       micModal.classList.add('active');
     } else {
-      showToast('⚠️ 카카오톡/네이버 앱에서는 마이크가 차단됩니다. Chrome 앱으로 열어주세요.');
+      showToast('⚠️ 음성 인식을 지원하지 않는 브라우저입니다. Chrome 앱으로 열어주세요.');
     }
     return;
   }
@@ -1998,25 +1971,27 @@ function startVoiceTurn(speakerLang) {
     state.isSpeakingNow = false;
   }
 
-  isAbortingVoiceTurn = false;
-  // 기존 세션 깨끗이 정리
-  if (voiceTurnRec) {
-    try {
-      voiceTurnRec.onresult = null;
-      voiceTurnRec.onerror = null;
-      voiceTurnRec.onend = null;
-      voiceTurnRec.abort();
-    } catch(e) {}
-    voiceTurnRec = null;
-  }
+  // 1. 이전 세션 타이머, 버퍼, 인스턴스 완전 초기화 (Clean Reset)
   if (voiceSilenceTimer) {
     clearTimeout(voiceSilenceTimer);
     voiceSilenceTimer = null;
   }
 
+  if (voiceTurnRec) {
+    try {
+      voiceTurnRec.onresult = null;
+      voiceTurnRec.onerror = null;
+      voiceTurnRec.onend = null;
+      voiceTurnRec.onstart = null;
+      voiceTurnRec.abort();
+    } catch(e) {}
+    voiceTurnRec = null;
+  }
+
   voiceTurnBuffer = '';
+  voiceTurnFinalBuffer = '';
+  isVoiceTurnDispatched = false;
   activeVoiceSpeaker = speakerLang;
-  isTranslatingVoiceTurn = false;
 
   const koBtn = document.getElementById('voice-speak-ko-btn');
   const jaBtn = document.getElementById('voice-listen-ja-btn');
@@ -2054,115 +2029,88 @@ function startVoiceTurn(speakerLang) {
     voiceTurnRec = rec;
     rec.lang = speakerLang === 'ko' ? 'ko-KR' : 'ja-JP';
     rec.continuous = true;
-    rec.interimResults = true;
-
-    rec.onstart = () => {};
+    rec.interimResults = true; // 실시간 텍스트 피드백 활성화
 
     rec.onresult = (event) => {
-      // 🛡️ 번역 중이거나 이미 세션이 닫혔으면 잔여 패킷 무시
-      if (isTranslatingVoiceTurn || !activeVoiceSpeaker) return;
+      // 이미 번역이 실행되었거나 세션이 종료되었으면 잔여 이벤트 무시
+      if (isVoiceTurnDispatched || isTranslatingVoiceTurn || !activeVoiceSpeaker) return;
 
-      let fullTranscript = '';
-      const stripPunc = (s) => s.replace(/[.,?!~요다까]/g, '').trim();
-      for (let i = 0; i < event.results.length; ++i) {
-        let chunk = event.results[i][0].transcript;
-        
-        let rawChunk = chunk.trim();
-        let rawFull = fullTranscript.trim();
-        let cleanChunk = stripPunc(rawChunk);
-        let cleanFull = stripPunc(rawFull);
-        
-        if (cleanFull && cleanChunk.startsWith(cleanFull)) {
-          // 안드로이드 크롬 누적 버그: 이전 텍스트가 이미 포함되어 있으면 덮어씀 (문장부호 무시)
-          fullTranscript = chunk;
-        } else if (cleanFull && cleanFull.endsWith(cleanChunk)) {
-          // 완전 중복 무시
+      let interimTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        const result = event.results[i];
+        const transcript = result[0] ? result[0].transcript : '';
+        if (result.isFinal) {
+          voiceTurnFinalBuffer += transcript;
         } else {
-          // 정상적인 조각 이어붙이기
-          fullTranscript += chunk;
+          interimTranscript += transcript;
         }
       }
 
-      const currentSpoken = fullTranscript.trim();
+      // 전체 인식된 현재 텍스트 결합 (표준 Web Speech API 규격)
+      const currentSpoken = (voiceTurnFinalBuffer + interimTranscript).trim();
       if (currentSpoken) {
         voiceTurnBuffer = currentSpoken;
         if (streamText) streamText.innerText = `🗣️ "${currentSpoken}"`;
 
-        // ⏱️ 묵음 감지 타이머: 1400ms(1.4초)로 여유를 주어 말이 중간에 끊겨 2번 번역되는 현상 완벽 방지!
+        // ⏱️ 묵음 감지 타이머: 1.2초간 추가 발화가 없으면 자동으로 번역 실행 (딱 1회)
         if (voiceSilenceTimer) clearTimeout(voiceSilenceTimer);
         voiceSilenceTimer = setTimeout(() => {
           stopVoiceTurn(true);
-        }, 1400);
+        }, 1200);
       }
     };
 
     rec.onerror = (err) => {
+      if (voiceSilenceTimer) {
+        clearTimeout(voiceSilenceTimer);
+        voiceSilenceTimer = null;
+      }
       if (err.error === 'not-allowed' || err.error === 'service-not-allowed') {
-        alert('🎙️ 마이크 권한이 차단되었거나 지원하지 않는 브라우저입니다!\n\n💡 카카오톡 앱 등이라면 우측 상단/하단 메뉴를 눌러\n👉 [다른 브라우저로 열기] (삼성 인터넷 등)를 선택해주세요.');
-      }
-      if (err.error !== 'no-speech' && err.error !== 'aborted') {
+        alert('🎙️ 마이크 권한이 차단되었거나 지원하지 않는 브라우저입니다!\n\n💡 카카오톡/네이버 앱 내부 창이라면 우측 상단 메뉴를 눌러\n👉 [다른 브라우저로 열기] (Chrome 앱 등)를 선택해주세요.');
+        resetVoiceTurnUI();
+      } else if (err.error !== 'no-speech' && err.error !== 'aborted') {
         if (streamText) streamText.innerText = `[오류 발생] ${err.error}`;
-      }
-      if (err.error !== 'no-speech') {
         resetVoiceTurnUI();
       }
     };
 
     rec.onend = () => {
-      if (activeVoiceSpeaker) {
-        if (voiceTurnBuffer && !isTranslatingVoiceTurn) {
-          stopVoiceTurn(true);
-        } else {
-          resetVoiceTurnUI();
-        }
+      if (voiceSilenceTimer) {
+        clearTimeout(voiceSilenceTimer);
+        voiceSilenceTimer = null;
+      }
+      // 세션이 끝났을 때: 아직 번역이 실행되지 않았고 인식된 텍스트가 있으면 1회 실행
+      if (!isVoiceTurnDispatched && activeVoiceSpeaker && voiceTurnBuffer.trim()) {
+        stopVoiceTurn(true);
+      } else if (!isVoiceTurnDispatched) {
+        resetVoiceTurnUI();
       }
     };
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      // 오디오 스트림은 권한 확인용이므로 즉시 닫습니다.
-      stream.getTracks().forEach(track => track.stop());
-    } catch (err) {
-      console.error('Mic permission error:', err);
-      resetVoiceTurnUI();
-      if (err.name === 'NotAllowedError' || err.name === 'NotFoundError' || err.name === 'TypeError') {
-        alert('🎙️ 마이크 권한이 차단되었거나 지원하지 않는 브라우저입니다!\n\n💡 카카오톡/네이버 앱 내부 창이라면 우측 하단/상단의 [⋮] 메뉴를 눌러\n👉 [다른 브라우저로 열기] (삼성 인터넷 등)를 선택해주세요.');
-      } else {
-        alert('🎙️ 마이크를 시작할 수 없습니다: ' + err.name);
-      }
-      return;
-    }
 
     rec.start();
   } catch (err) {
     console.error('STT Start Error:', err);
     resetVoiceTurnUI();
-    showToast('마이크를 시작할 수 없습니다.');
+    showToast('마이크를 시작할 수 없습니다. Chrome 브라우저를 확인해 주세요.');
   }
 }
 
-let lastRequestedText = '';
-let lastRequestedTimestamp = 0;
-let isAbortingVoiceTurn = false; // 한 세션에서 다중 번역 방지용 강력한 락
-
 function stopVoiceTurn(doTranslate = false) {
-  if (isAbortingVoiceTurn) return; // 이미 번역을 위해 중단 중이면 무시
-  isAbortingVoiceTurn = true;
-
   if (voiceSilenceTimer) {
     clearTimeout(voiceSilenceTimer);
     voiceSilenceTimer = null;
   }
-  const textToTranslate = voiceTurnBuffer.trim();
-  const currentSpeaker = activeVoiceSpeaker;
-  voiceTurnBuffer = '';
 
+  const textToTranslate = (voiceTurnBuffer || voiceTurnFinalBuffer).trim();
+  const currentSpeaker = activeVoiceSpeaker;
+
+  voiceTurnBuffer = '';
+  voiceTurnFinalBuffer = '';
   activeVoiceSpeaker = null;
 
   if (voiceTurnRec) {
     try {
-      // 모든 이벤트 리스너를 완전히 끊어서 백그라운드 콜백 차단!
+      // 모든 이벤트 리스너를 완전히 끊어서 백그라운드 재귀 콜백 원천 차단
       voiceTurnRec.onresult = null;
       voiceTurnRec.onerror = null;
       voiceTurnRec.onend = null;
@@ -2173,7 +2121,9 @@ function stopVoiceTurn(doTranslate = false) {
 
   resetVoiceTurnUI();
 
-  if (doTranslate && textToTranslate && currentSpeaker) {
+  // 이번 턴에서 딱 1회만 깨끗하게 triggerVoiceTranslate 호출
+  if (doTranslate && !isVoiceTurnDispatched && textToTranslate && currentSpeaker) {
+    isVoiceTurnDispatched = true;
     triggerVoiceTranslate(textToTranslate, currentSpeaker);
   }
 }
@@ -2196,30 +2146,12 @@ function resetVoiceTurnUI() {
 }
 
 async function triggerVoiceTranslate(text, fromLang) {
-  let cleanText = (text || '').trim();
-  
-  // 안드로이드 크롬 STT 중복 반복(Stutter) 버그 텍스트 필터링 (정규식 룩비하인드 제외 안전버전)
-  // "안녕하세요. 안녕하세요. 화장실" -> "안녕하세요. 화장실"
-  function removeStutterWords(str) {
-    if (!str) return str;
-    const words = str.trim().split(/\s+/);
-    const stripPunc = (s) => s.replace(/[.,?!~요다까]/g, '');
-    // 가장 긴 패턴부터 검사해서 잘라냄
-    for (let len = Math.floor(words.length / 2); len >= 1; len--) {
-        const firstHalf = words.slice(0, len).join('');
-        const secondHalf = words.slice(len, len * 2).join('');
-        if (stripPunc(firstHalf) === stripPunc(secondHalf)) {
-            return words.slice(len).join(' ');
-        }
-    }
-    return str;
-  }
-  
-  cleanText = removeStutterWords(cleanText);
+  const cleanText = (text || '').trim();
 
+  // 빈 텍스트이거나 이미 번역 중이면 중복 실행 차단
   if (!cleanText || isTranslatingVoiceTurn) return;
 
-  // 🛡️ 동일 문장 1.5초 내 중복 번역 방지 (두 번 나오는 현상 원천 차단)
+  // 🛡️ 동일 문장 1.5초 내 중복 번역 방지 (두 번 번역되는 현상 원천 차단)
   const now = Date.now();
   if (cleanText === lastRequestedText && (now - lastRequestedTimestamp) < 1500) {
     return;
@@ -2240,7 +2172,7 @@ async function triggerVoiceTranslate(text, fromLang) {
 
   const destLangName = toLang === 'ja' ? '일본어' : '한국어';
   if (streamBox) streamBox.style.display = 'block';
-  if (streamText) streamText.innerText = `⏳ ${destLangName}로 번역 중입니다: "${text}"`;
+  if (streamText) streamText.innerText = `⏳ ${destLangName}로 번역 중입니다: "${cleanText}"`;
 
   showToast(`⏳ ${destLangName}로 번역 중입니다...`);
 
@@ -2253,7 +2185,7 @@ async function triggerVoiceTranslate(text, fromLang) {
     // 1순위: 로컬호스트 전용 프록시 (CORS 및 구글 봇 차단 100% 우회)
     if (isLocalhost) {
       try {
-        const localUrl = `/api/translate?q=${encodeURIComponent(text)}&sl=${fromLang}&tl=${toLang}`;
+        const localUrl = `/api/translate?q=${encodeURIComponent(cleanText)}&sl=${fromLang}&tl=${toLang}`;
         const lResp = await fetch(localUrl);
         if (lResp.ok) {
           const lData = await lResp.json();
@@ -2270,7 +2202,7 @@ async function triggerVoiceTranslate(text, fromLang) {
     // 2순위: Google Chrome 공식 확장 API (clients5 - 브라우저 차단 없음, 초고속)
     if (!translated) {
       try {
-        const cUrl = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=${fromLang}&tl=${toLang}&q=${encodeURIComponent(text)}`;
+        const cUrl = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=${fromLang}&tl=${toLang}&q=${encodeURIComponent(cleanText)}`;
         const cResp = await fetch(cUrl);
         if (cResp.ok) {
           const cData = await cResp.json();
@@ -2288,7 +2220,7 @@ async function triggerVoiceTranslate(text, fromLang) {
     // 3순위: MyMemory 번역 (브라우저 CORS 100% 지원)
     if (!translated) {
       try {
-        const mUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${fromLang}|${toLang}`;
+        const mUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(cleanText)}&langpair=${fromLang}|${toLang}`;
         const mResp = await fetch(mUrl);
         if (mResp.ok) {
           const mData = await mResp.json();
@@ -2308,7 +2240,7 @@ async function triggerVoiceTranslate(text, fromLang) {
     // 4순위: Google gtx (로마자 발음 및 비상 번역)
     if (!translated || (toLang === 'ja' && !rawRomaji)) {
       try {
-        const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${fromLang}&tl=${toLang}&dt=t&dt=rm&q=${encodeURIComponent(text)}`;
+        const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${fromLang}&tl=${toLang}&dt=t&dt=rm&q=${encodeURIComponent(cleanText)}`;
         const gResp = await fetch(gUrl);
         if (gResp.ok) {
           const gData = await gResp.json();
@@ -2342,7 +2274,7 @@ async function triggerVoiceTranslate(text, fromLang) {
       pron = convertToKoreanPronunciation(translated, rawRomaji);
     }
 
-    lastOriginalText = text;
+    lastOriginalText = cleanText;
     lastTranslatedText = translated;
     lastTranslatedLang = toLang;
     lastPronunciationText = pron;
@@ -2355,7 +2287,7 @@ async function triggerVoiceTranslate(text, fromLang) {
 
     if (resOriginal) {
       const speakerPrefix = fromLang === 'ko' ? '🇰🇷 나 (한국어)' : '🇯🇵 일본인 상대방';
-      resOriginal.innerText = `${speakerPrefix}: "${text}"`;
+      resOriginal.innerText = `${speakerPrefix}: "${cleanText}"`;
     }
 
     if (resJapanese) {
@@ -2380,7 +2312,7 @@ async function triggerVoiceTranslate(text, fromLang) {
     speakText(translated, toLang);
 
     // 기록 저장
-    addHistoryItem(text, translated, fromLang, toLang);
+    addHistoryItem(cleanText, translated, fromLang, toLang);
 
   } catch (outerErr) {
     console.error('triggerVoiceTranslate error:', outerErr);
