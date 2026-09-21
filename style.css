@@ -91,6 +91,17 @@ body {
   margin-bottom: 4px;
 }
 
+.header-version-badge {
+  background: #10B981;
+  color: #FFFFFF;
+  font-size: 9.5px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 10px;
+  letter-spacing: 0;
+  margin-left: 2px;
+}
+
 .header-title-row {
   display: flex;
   align-items: center;
@@ -1832,42 +1843,48 @@ body {
   font-weight: 600;
 }
 
-/* 2개의 큰 마이크 대화 버튼 그리드 */
+/* 2개의 정사각형(스퀘어) 마이크 대화 버튼 듀얼 그리드 */
 .voice-dual-grid {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
 
 .voice-main-btn {
   width: 100%;
+  aspect-ratio: 1 / 1;
   border: none;
-  border-radius: 16px;
-  padding: 16px 14px;
+  border-radius: 18px;
+  padding: 12px 10px;
   color: #FFFFFF;
   cursor: pointer;
   display: flex;
+  flex-direction: column;
+  justify-content: center;
   align-items: center;
-  gap: 14px;
-  transition: all 0.2s ease;
+  text-align: center;
+  box-sizing: border-box;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
 }
 
 .voice-main-btn.ko-btn {
   background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
-  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.28);
 }
 
 .voice-main-btn.ja-btn {
   background: linear-gradient(135deg, #E11D48 0%, #BE123C 100%);
-  box-shadow: 0 6px 18px rgba(225, 29, 72, 0.3);
+  box-shadow: 0 6px 18px rgba(225, 29, 72, 0.28);
 }
 
 .voice-main-btn:active {
-  transform: scale(0.98);
+  transform: scale(0.96);
 }
 
 .voice-main-btn.active {
-  background: linear-gradient(135deg, #DC2626 0%, #7F1D1D 100%) !important;
+  background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%) !important;
   animation: pulse 1.2s infinite;
   box-shadow: 0 6px 20px rgba(220, 38, 38, 0.55) !important;
 }
@@ -1875,31 +1892,42 @@ body {
 .voice-mic-circle {
   width: 48px;
   height: 48px;
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.22);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  font-size: 26px;
   flex-shrink: 0;
+  margin-bottom: 4px;
 }
 
 .voice-btn-texts {
   display: flex;
   flex-direction: column;
-  text-align: left;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  width: 100%;
 }
 
 .voice-btn-label {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
   color: #FFFFFF;
+  margin-top: 6px;
+  letter-spacing: -0.3px;
+  line-height: 1.2;
 }
 
 .voice-btn-status {
-  font-size: 11.5px;
-  color: rgba(255, 255, 255, 0.85);
+  font-size: 11px;
+  opacity: 0.9;
+  color: rgba(255, 255, 255, 0.9);
   margin-top: 2px;
+  line-height: 1.25;
+  letter-spacing: -0.2px;
+  word-break: keep-all;
 }
 
 /* 실시간 스트림 박스 */
@@ -1924,25 +1952,26 @@ body {
   white-space: nowrap;
 }
 
-/* 번역 결과 박스 */
+/* 번역 글자 중심 초깔끔 번역 결과 박스 */
 .voice-result-box {
-  margin-top: 12px;
-  background: linear-gradient(135deg, #FFF8F9 0%, #FFFFFF 100%);
+  margin-top: 14px;
+  background: linear-gradient(135deg, #FFF9FA 0%, #FFFFFF 100%);
   border: 2px solid #FECDD3;
-  border-radius: 14px;
-  padding: 14px;
-  animation: fadeIn 0.3s ease;
+  border-radius: 16px;
+  padding: 16px 14px 14px;
+  box-shadow: 0 4px 16px rgba(225, 29, 72, 0.08);
+  animation: fadeIn 0.25s ease;
 }
 
 .voice-result-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .result-badge {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   color: #E11D48;
 }
@@ -1964,29 +1993,86 @@ body {
 }
 
 .voice-res-original {
-  font-size: 12.5px;
+  font-size: 13px;
   color: #64748B;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   font-weight: 600;
-}
-
-.voice-res-japanese {
-  font-size: 19px;
-  font-weight: 900;
-  color: #0F172A;
   line-height: 1.4;
   word-break: break-word;
 }
 
+.voice-res-japanese {
+  font-size: 25px;
+  font-weight: 900;
+  color: #0F172A;
+  line-height: 1.35;
+  margin: 8px 0;
+  word-break: break-word;
+  letter-spacing: -0.4px;
+}
+
 .voice-res-reading {
-  margin-top: 6px;
+  margin-top: 4px;
+  margin-bottom: 14px;
+  font-size: 15.5px;
+  font-weight: 800;
+  color: #9A3412;
+  background: #FFEDD5;
+  border: 1px solid #FED7AA;
+  padding: 6px 12px;
+  border-radius: 8px;
+  display: inline-block;
+  line-height: 1.35;
+}
+
+/* 액션 버튼 행: [🔊 다시 듣기], [📱 크게 보기], [📋 복사] */
+.voice-result-actions {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr 0.85fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.voice-action-btn {
+  border: none;
+  border-radius: 12px;
+  padding: 11px 8px;
   font-size: 13.5px;
   font-weight: 800;
-  color: #B45309;
-  background: #FEF3C7;
-  padding: 4px 8px;
-  border-radius: 6px;
-  display: inline-block;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.voice-action-btn:active {
+  transform: scale(0.96);
+}
+
+.voice-action-btn.respeak-btn {
+  background: linear-gradient(135deg, #10B981, #059669);
+  color: #FFFFFF;
+  box-shadow: 0 3px 8px rgba(16, 185, 129, 0.25);
+}
+
+.voice-action-btn.bigshow-btn {
+  background: linear-gradient(135deg, #3B82F6, #2563EB);
+  color: #FFFFFF;
+  box-shadow: 0 3px 8px rgba(37, 99, 235, 0.25);
+}
+
+.voice-action-btn.copy-btn {
+  background: #F1F5F9;
+  color: #334155;
+  border: 1.5px solid #CBD5E1;
+}
+
+.voice-action-btn.copy-btn:active {
+  background: #E2E8F0;
 }
 
 /* 원클릭 필수 표현 */

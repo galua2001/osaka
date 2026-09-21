@@ -2,6 +2,8 @@
    OsakaGo - 오사카 여행 번역기 & 음성 길찾기 & 맛집 가이드 메인 스크립트
    ========================================================================== */
 
+const CURRENT_VERSION = '9.5';
+
 // 전역 상태
 const state = {
   currentTab: 'translate',
@@ -2175,8 +2177,8 @@ function resetVoiceTurnUI() {
   if (jaBtn) jaBtn.classList.remove('active');
   if (koIcon) koIcon.innerText = '🇰🇷';
   if (jaIcon) jaIcon.innerText = '🇯🇵';
-  if (koStatus) koStatus.innerText = '터치 후 말하기 ➔ 일본어로 소리 재생 🇯🇵';
-  if (jaStatus) jaStatus.innerText = '터치 후 일본인 말소리 ➔ 한국어로 소리 재생 🇰🇷';
+  if (koStatus) koStatus.innerText = '내가 말하기 ➔ 일본어로 번역 및 낭독';
+  if (jaStatus) jaStatus.innerText = '상대방 듣기 ➔ 한국어로 번역 및 낭독';
 }
 
 async function triggerVoiceTranslate(text, fromLang) {
@@ -4451,6 +4453,44 @@ function setupEventListeners() {
         showToast('먼저 말씀해주세요.');
       }
     });
+  }
+
+  // 📋 번역 결과 클립보드 복사 버튼
+  const voiceCopyBtn = document.getElementById('voice-copy-btn');
+  if (voiceCopyBtn) {
+    voiceCopyBtn.addEventListener('click', () => {
+      if (lastTranslatedText) {
+        const textToCopy = lastTranslatedText;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(textToCopy).then(() => {
+            showToast('📋 번역 텍스트가 복사되었습니다!');
+          }).catch(() => {
+            copyTextFallback(textToCopy);
+          });
+        } else {
+          copyTextFallback(textToCopy);
+        }
+      } else {
+        showToast('복사할 번역 결과가 없습니다.');
+      }
+    });
+  }
+
+  function copyTextFallback(text) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('📋 번역 텍스트가 복사되었습니다!');
+    } catch (e) {
+      showToast('복사에 실패했습니다.');
+    }
   }
 
   // 직접 글자 입력 번역
