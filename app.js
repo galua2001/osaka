@@ -2,7 +2,7 @@
    OsakaGo - 오사카 여행 번역기 & 음성 길찾기 & 맛집 가이드 메인 스크립트
    ========================================================================== */
 
-const CURRENT_VERSION = '9.6';
+const CURRENT_VERSION = '9.7';
 
 // 전역 상태
 const state = {
@@ -440,6 +440,7 @@ function initializeApp() {
   try { renderFoodList(); } catch(e) { console.warn('renderFoodList error:', e); }
   try { renderPlans(); } catch(e) { console.warn('renderPlans error:', e); }
   try { initLiveDialog(); } catch(e) { console.warn('initLiveDialog error:', e); }
+  try { renderAlbumFeed(); } catch(e) { console.warn('renderAlbumFeed error:', e); }
   try { setupEventListeners(); } catch(e) { console.error('setupEventListeners error:', e); }
 }
 
@@ -4085,332 +4086,359 @@ function generateTravelExplanation(jaText, koText, lineItems = []) {
   `;
 }
 
-// 📱 파파고 스타일 줄별(Line by Line) 메뉴판 카드 렌더링 함수
-function renderMenuLines(lineResults, container) {
-  if (!container) return;
-  container.innerHTML = '';
+// ==========================================
+// 📸 둘만의 오사카 여행 사진 & 동영상 추억 앨범 (IndexedDB 영구 저장소)
+// ==========================================
+const ALBUM_DB_NAME = 'osaka_travel_db';
+const ALBUM_DB_VERSION = 1;
+const ALBUM_STORE_NAME = 'media';
 
-  if (!lineResults || lineResults.length === 0) {
-    container.innerHTML = '<div style="font-size: 12px; color: #64748B; padding: 8px;">감지된 메뉴 줄이 없습니다.</div>';
-    return;
+let albumDBPromise = null;
+
+// IndexedDB 초기화 및 연결 보장
+function getAlbumDB() {
+  if (!albumDBPromise) {
+    albumDBPromise = new Promise((resolve, reject) => {
+      try {
+        const req = indexedDB.open(ALBUM_DB_NAME, ALBUM_DB_VERSION);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(ALBUM_STORE_NAME)) {
+            const store = db.createObjectStore(ALBUM_STORE_NAME, { keyPath: 'id' });
+            store.createIndex('timestamp', 'timestamp', { unique: false });
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => {
+          console.error('[IndexedDB] 미디어 저장소 열기 실패:', req.error);
+          reject(req.error);
+        };
+      } catch (err) {
+        console.error('[IndexedDB] 예외 발생:', err);
+        reject(err);
+      }
+    });
   }
+  return albumDBPromise;
+}
 
-  lineResults.forEach((item, idx) => {
-    const card = document.createElement('div');
-    card.className = 'photo-line-card';
-
-    const escapedJa = escapeHtml(item.ja);
-    const escapedKo = escapeHtml(item.ko);
-    const escapedPron = escapeHtml(item.reading || '');
-    const jsJa = item.ja.replace(/'/g, "\\'").replace(/\n/g, ' ');
-
-    let priceHtml = '';
-    if (item.priceInfo) {
-      const p = item.priceInfo;
-      priceHtml = `
-        <div class="photo-line-meta">
-          <span class="photo-price-badge">
-            <span>💴</span> ¥${p.yen.toLocaleString()} (약 ${p.krwApprox.toLocaleString()}원)
-          </span>
-          <span class="photo-tax-badge">${escapeHtml(p.taxNote)}</span>
-        </div>
-      `;
-    }
-
-    // 매칭된 백과사전 단어가 있으면 뱃지 표시
-    let matchTagsHtml = '';
-    if (item.matchedKnowledge && item.matchedKnowledge.length > 0) {
-      matchTagsHtml = '<div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px;">';
-      item.matchedKnowledge.forEach(k => {
-        matchTagsHtml += `<span style="background: #EFF6FF; color: #1D4ED8; font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 4px; border: 1px solid #BFDBFE;">🍜 ${escapeHtml(k.pron || k.title.split(' ')[0])}</span>`;
-      });
-      matchTagsHtml += '</div>';
-    }
-
-    card.innerHTML = `
-      <div class="photo-line-header">
-        <div class="photo-line-ja">${escapedJa}</div>
-        <span style="font-size: 10.5px; font-weight: 800; color: #7C3AED; background: #F5F3FF; padding: 2px 6px; border-radius: 6px;">#${idx + 1}</span>
-      </div>
-      ${escapedPron ? `<div class="photo-line-pron"><span>🗣️</span> <span>[발음] ${escapedPron}</span></div>` : ''}
-      <div class="photo-line-ko">🇰🇷 ${escapedKo}</div>
-      ${priceHtml}
-      ${matchTagsHtml}
-      <div class="photo-line-actions">
-        <button type="button" onclick="window.speakPhotoItem('${jsJa}')" class="photo-btn-mini">
-          <span>🔊</span> <span>발음</span>
-        </button>
-        <button type="button" onclick="window.speakPhotoOrder('${jsJa}')" class="photo-btn-mini order-btn">
-          <span>🗣️</span> <span>이거 주세요</span>
-        </button>
-        <button type="button" onclick="window.copyPhotoText('${jsJa}')" class="photo-btn-mini">
-          <span>📋</span> <span>복사</span>
-        </button>
-      </div>
-    `;
-
-    container.appendChild(card);
+// 미디어 아이템 저장
+async function saveAlbumMedia(mediaItem) {
+  const db = await getAlbumDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(ALBUM_STORE_NAME, 'readwrite');
+    const store = tx.objectStore(ALBUM_STORE_NAME);
+    const req = store.put(mediaItem);
+    req.onsuccess = () => resolve(mediaItem);
+    req.onerror = () => reject(req.error);
   });
 }
 
-// 📸 사진 촬영 글자 해석(OCR) & 정밀 번역 파이프라인
-async function processPhotoFile(file) {
-  if (!file) return;
+// 전체 미디어 아이템 조회 (최신 등록순 내림차순 정렬)
+async function getAllAlbumMedia() {
+  const db = await getAlbumDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(ALBUM_STORE_NAME, 'readonly');
+    const store = tx.objectStore(ALBUM_STORE_NAME);
+    const req = store.getAll();
+    req.onsuccess = () => {
+      const list = req.result || [];
+      list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      resolve(list);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
 
-  const previewBox = document.getElementById('photo-preview-box');
-  const previewImg = document.getElementById('photo-preview-img');
-  const progressBox = document.getElementById('photo-progress-box');
-  const progressText = document.getElementById('photo-progress-text');
-  const progressPercent = document.getElementById('photo-progress-percent');
-  const progressFill = document.getElementById('photo-progress-fill');
-  const resultBox = document.getElementById('photo-result-box');
-  const resLinesContainer = document.getElementById('photo-lines-container');
-  const resOriginal = document.getElementById('photo-res-original');
-  const resTranslated = document.getElementById('photo-res-translated');
-  const resExplanation = document.getElementById('photo-res-explanation');
-  const itemCountBadge = document.getElementById('photo-item-count-badge');
+// 개별 미디어 삭제
+async function deleteAlbumMedia(id) {
+  const db = await getAlbumDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(ALBUM_STORE_NAME, 'readwrite');
+    const store = tx.objectStore(ALBUM_STORE_NAME);
+    const req = store.delete(id);
+    req.onsuccess = () => resolve(true);
+    req.onerror = () => reject(req.error);
+  });
+}
 
-  unlockAudio();
+// 날짜 시각 표시 포맷 (예: 09/21 16:30)
+function formatAlbumDate(timestamp) {
+  if (!timestamp) return '';
+  const d = new Date(timestamp);
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const h = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${m}/${day} ${h}:${min}`;
+}
 
-  // 1. 즉시 사진 미리보기 표시 & 분석 프로그레스 시작
-  let objectUrl = null;
-  try {
-    objectUrl = URL.createObjectURL(file);
-    if (previewImg) previewImg.src = objectUrl;
-  } catch(e) {
+// 모바일 최적화 이미지 다운스케일 & 압축 (가로/세로 최대 1280px, JPEG 82% 퀄리티)
+async function compressImage(file) {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = (re) => { if (previewImg) previewImg.src = re.target.result; };
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const maxDim = 1280;
+          let w = img.width || 800;
+          let h = img.height || 600;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) {
+              h = Math.round((h * maxDim) / w);
+              w = maxDim;
+            } else {
+              w = Math.round((w * maxDim) / h);
+              h = maxDim;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+          resolve(dataUrl);
+        } catch (canvasErr) {
+          // 캔버스 압축 실패 시 FileReader 결과 그대로 사용
+          resolve(e.target.result);
+        }
+      };
+      img.onerror = () => reject(new Error('이미지 디코딩 실패'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('파일 읽기 실패'));
     reader.readAsDataURL(file);
-  }
+  });
+}
 
-  if (previewBox) previewBox.style.display = 'flex';
-  if (progressBox) progressBox.style.display = 'block';
-  if (resultBox) resultBox.style.display = 'none';
+// 둘만의 여행 앨범 피드 렌더링 & URL 생명주기 관리
+let createdObjectUrls = [];
+function revokeAlbumUrls() {
+  createdObjectUrls.forEach(u => {
+    try { URL.revokeObjectURL(u); } catch(e) {}
+  });
+  createdObjectUrls = [];
+}
 
-  progressBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-  function updateProgress(msg, pct) {
-    if (progressText) progressText.innerText = msg;
-    if (progressPercent) progressPercent.innerText = `${pct}%`;
-    if (progressFill) progressFill.style.width = `${pct}%`;
-  }
-
-  updateProgress('📸 사진 로딩 중... 글자 분석 준비 중... ⏳', 15);
+async function renderAlbumFeed() {
+  const feed = document.getElementById('travel-album-feed');
+  const countBadge = document.getElementById('album-count-badge');
+  if (!feed) return;
 
   try {
-    // 2. 이미지 로드 및 모바일 최적화 다운스케일링 (최대 1000px로 글자 선명도 유지)
-    const img = new Image();
-    const loadPromise = new Promise((resolve, reject) => {
-      img.onload = () => resolve();
-      img.onerror = () => reject(new Error('이미지 로딩 실패'));
-    });
-    img.src = objectUrl || previewImg.src;
+    revokeAlbumUrls();
+    const list = await getAllAlbumMedia();
 
-    await Promise.race([
-      loadPromise,
-      new Promise((_, reject) => setTimeout(() => reject(new Error('이미지 디코딩 시간 초과')), 4000))
-    ]);
-
-    const maxDim = 1000;
-    let w = img.width || 800;
-    let h = img.height || 600;
-    if (w > maxDim || h > maxDim) {
-      if (w > h) {
-        h = Math.round((h * maxDim) / w);
-        w = maxDim;
-      } else {
-        w = Math.round((w * maxDim) / h);
-        h = maxDim;
-      }
+    if (countBadge) {
+      countBadge.innerText = `${list.length}장`;
     }
 
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0, w, h);
-
-    // 흑백 및 대비 보정 (메뉴판 글자 인식률 대폭 향상)
-    try {
-      const imgData = ctx.getImageData(0, 0, w, h);
-      const d = imgData.data;
-      for (let i = 0; i < d.length; i += 4) {
-        const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-        const enhanced = Math.min(255, Math.max(0, (gray - 128) * 1.3 + 128));
-        d[i] = enhanced;
-        d[i + 1] = enhanced;
-        d[i + 2] = enhanced;
-      }
-      ctx.putImageData(imgData, 0, 0);
-    } catch(e) {
-      console.warn('Canvas filter pass');
-    }
-
-    updateProgress('일본어 고속 OCR 엔진 가동 중... 🤖', 35);
-
-    // 3. Tesseract 고속 OCR 엔진 실행
-    if (typeof Tesseract === 'undefined') {
-      throw new Error('TESSERACT_NOT_LOADED');
-    }
-
-    const ocrPromise = (async () => {
-      const worker = await Tesseract.createWorker('jpn', 1, {
-        langPath: 'https://cdn.jsdelivr.net/gh/naptha/tessdata@gh-pages/4.0.0_fast',
-        logger: m => {
-          if (m.status === 'recognizing text') {
-            const p = Math.min(88, Math.round(35 + (m.progress || 0) * 53));
-            updateProgress(`메뉴판 글자 정밀 판독 중... (${p}%)`, p);
-          }
-        }
-      });
-      const ret = await worker.recognize(canvas);
-      await worker.terminate();
-      return ret.data && ret.data.text ? ret.data.text.trim() : '';
-    })();
-
-    const recognizedText = await Promise.race([
-      ocrPromise,
-      new Promise((_, reject) => setTimeout(() => reject(new Error('OCR_TIMEOUT')), 13000))
-    ]);
-
-    if (!recognizedText || recognizedText.length < 2) {
-      if (progressBox) progressBox.style.display = 'none';
-      if (resultBox) {
-        resultBox.style.display = 'block';
-        if (resLinesContainer) resLinesContainer.innerHTML = '';
-        if (resOriginal) resOriginal.innerText = '(글자가 또렷하지 않거나 감지되지 않았습니다)';
-        if (resTranslated) {
-          resTranslated.innerHTML = `
-            <div style="line-height: 1.6;">
-              💡 <strong>사진을 더 가깝고 밝게 다시 찍어보세요!</strong><br>
-              • 실시간으로 메뉴판을 즉시 번역하고 싶다면 상단의 <strong>[🦜 파파고 카메라]</strong> 또는 <strong>[🔍 구글 렌즈 번역]</strong>을 누르시면 화면 전체가 실시간 한국어로 바뀝니다.<br>
-              • 아래의 <strong>[메뉴판 핵심 단어 칩]</strong>을 터치하시면 주요 일본어 표현을 즉시 확인하실 수 있습니다.
-            </div>
-          `;
-        }
-        if (resExplanation) resExplanation.innerHTML = generateTravelExplanation('', '');
-        resultBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }
+    if (!list || list.length === 0) {
+      feed.innerHTML = `
+        <div class="album-empty-state">
+          <span class="album-empty-icon">🌸</span>
+          <div class="album-empty-title">둘만의 소중한 오사카 여행 순간을 여기에 모두 담아보세요!</div>
+          <div class="album-empty-sub">
+            여행 중 카메라/갤러리 앱을 따로 찾을 필요 없이,<br>
+            위의 <strong>[사진 촬영]</strong>이나 <strong>[동영상 촬영]</strong>을 누르면<br>
+            둘만의 추억이 여기에 타임라인으로 예쁘게 보관됩니다 ✨
+          </div>
+        </div>
+      `;
       return;
     }
 
-    updateProgress('구글 번역 & 줄별 메뉴판 정밀 분석 중... ✨', 92);
+    feed.innerHTML = '';
 
-    // 4. 구글 다국어 번역 파이프라인 (전체 번역 + 줄단위 Line by Line 분석)
-    // 텍스트를 줄단위로 분리
-    const rawLines = recognizedText.split(/\r?\n/)
-      .map(l => l.trim())
-      .filter(l => l.length >= 1);
+    list.forEach(item => {
+      const card = document.createElement('div');
+      card.className = 'album-item-card';
 
-    // 전체 텍스트 번역 병렬 호출
-    const totalTransPromise = translateJaToKoWithGoogle(recognizedText);
-
-    // 각 줄별 고속 번역 및 분석 (최대 25줄까지 세부 분석)
-    const targetLines = rawLines.slice(0, 25);
-    const lineAnalysisPromises = targetLines.map(async (line) => {
-      const { translated, reading } = await translateJaToKoWithGoogle(line);
-      const priceInfo = extractPriceInfo(line);
-      const matchedKnowledge = findKnowledgeMatches(`${line} ${translated}`);
-      return {
-        ja: line,
-        ko: translated || line,
-        reading: reading || '',
-        priceInfo: priceInfo,
-        matchedKnowledge: matchedKnowledge
-      };
-    });
-
-    const [totalTransResult, lineResults] = await Promise.all([
-      totalTransPromise,
-      Promise.all(lineAnalysisPromises)
-    ]);
-
-    const translatedTotalText = totalTransResult.translated || '(번역 완료)';
-    const explanationHtml = generateTravelExplanation(recognizedText, translatedTotalText, lineResults);
-
-    lastPhotoOriginalJa = recognizedText;
-    lastPhotoTranslatedKo = translatedTotalText;
-
-    if (progressBox) progressBox.style.display = 'none';
-    if (resultBox) {
-      resultBox.style.display = 'block';
-      if (itemCountBadge) itemCountBadge.innerText = `${lineResults.length}개 메뉴 줄별 분석 완료`;
-      if (resLinesContainer) renderMenuLines(lineResults, resLinesContainer);
-      if (resOriginal) resOriginal.innerText = recognizedText;
-      if (resTranslated) resTranslated.innerText = translatedTotalText;
-      if (resExplanation) resExplanation.innerHTML = explanationHtml;
-      resultBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-
-    showToast('🎉 파파고급 줄별 메뉴판 번역 및 꿀팁 분석 완료!');
-
-  } catch (err) {
-    console.error('Photo OCR error:', err);
-    if (progressBox) progressBox.style.display = 'none';
-
-    if (resultBox) {
-      resultBox.style.display = 'block';
-      if (resLinesContainer) resLinesContainer.innerHTML = '';
-      if (resOriginal) resOriginal.innerText = '(모바일 네트워크 지연 또는 글자 판독 실패)';
-      if (resTranslated) {
-        resTranslated.innerHTML = `
-          <div style="line-height: 1.6; color: #1E3A8A;">
-            ⚡ <strong>가장 확실하고 빠른 실시간 번역 방법:</strong><br>
-            상단의 <strong>[🦜 파파고 카메라]</strong> 또는 <strong>[🔍 구글 렌즈 번역]</strong>을 누르시면 카메라 화면 전체가 실시간 한국어로 즉시 번역됩니다!<br>
-            또는 아래의 <strong>[메뉴판 핵심 단어 칩]</strong>을 터치하시면 0.1초 만에 상세 설명이 나옵니다.
+      let mediaHtml = '';
+      if (item.type === 'video') {
+        let videoSrc = '';
+        if (typeof item.data === 'string') {
+          videoSrc = item.data;
+        } else if (item.data instanceof Blob) {
+          videoSrc = URL.createObjectURL(item.data);
+          createdObjectUrls.push(videoSrc);
+        }
+        mediaHtml = `
+          <video src="${videoSrc}" class="album-item-media" preload="metadata" muted playsinline></video>
+          <div class="album-video-badge"><span>🎥</span><span>동영상</span></div>
+          <div class="album-play-icon">
+            <div class="album-play-triangle"></div>
           </div>
         `;
+      } else {
+        const imgSrc = typeof item.data === 'string' ? item.data : '';
+        mediaHtml = `
+          <img src="${imgSrc}" class="album-item-media" alt="여행 사진" loading="lazy">
+        `;
       }
-      if (resExplanation) resExplanation.innerHTML = generateTravelExplanation('', '');
-      resultBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+      const dateStr = formatAlbumDate(item.timestamp);
+
+      card.innerHTML = `
+        ${mediaHtml}
+        <div class="album-item-overlay">
+          <span class="album-item-date">${dateStr}</span>
+          <button type="button" class="album-delete-btn" title="이 추억 삭제">🗑️</button>
+        </div>
+      `;
+
+      // 카드 터치 시 전체화면 확대 뷰어
+      card.addEventListener('click', () => {
+        openMediaViewer(item);
+      });
+
+      // 개별 삭제 버튼 이벤트
+      const delBtn = card.querySelector('.album-delete-btn');
+      if (delBtn) {
+        delBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (confirm('이 여행 추억을 삭제할까요?')) {
+            await deleteAlbumMedia(item.id);
+            showToast('🗑️ 추억이 삭제되었습니다.');
+            renderAlbumFeed();
+          }
+        });
+      }
+
+      feed.appendChild(card);
+    });
+
+  } catch (err) {
+    console.error('renderAlbumFeed error:', err);
+    feed.innerHTML = '<div style="grid-column:1/-1; padding:20px; text-align:center; color:#EF4444; font-size:12px;">앨범을 불러오는 중 오류가 발생했습니다.</div>';
+  }
+}
+
+// 전체화면 미디어 뷰어
+let activeViewerItem = null;
+function openMediaViewer(item) {
+  const modal = document.getElementById('media-viewer-modal');
+  const body = document.getElementById('media-viewer-body');
+  const title = document.getElementById('media-viewer-title');
+  const time = document.getElementById('media-viewer-time');
+  if (!modal || !body) return;
+
+  activeViewerItem = item;
+  body.innerHTML = '';
+
+  if (title) {
+    title.innerText = item.type === 'video' ? '🎥 여행 동영상' : '📸 여행 사진';
+  }
+  if (time) {
+    time.innerText = formatAlbumDate(item.timestamp);
+  }
+
+  if (item.type === 'video') {
+    let videoSrc = '';
+    if (typeof item.data === 'string') {
+      videoSrc = item.data;
+    } else if (item.data instanceof Blob) {
+      videoSrc = URL.createObjectURL(item.data);
+      createdObjectUrls.push(videoSrc);
     }
+    const video = document.createElement('video');
+    video.src = videoSrc;
+    video.controls = true;
+    video.autoplay = true;
+    video.playsInline = true;
+    body.appendChild(video);
+  } else {
+    const img = document.createElement('img');
+    img.src = item.data;
+    img.alt = '여행 사진 확대';
+    body.appendChild(img);
+  }
 
-    showToast('⚠️ 상단 실시간 카메라 번역 또는 단어 검색을 이용해 보세요.');
+  modal.classList.add('active');
+}
+
+function closeMediaViewer() {
+  const modal = document.getElementById('media-viewer-modal');
+  const body = document.getElementById('media-viewer-body');
+  if (!modal) return;
+  if (body) {
+    const video = body.querySelector('video');
+    if (video) {
+      video.pause();
+      video.src = '';
+    }
+    body.innerHTML = '';
+  }
+  modal.classList.remove('active');
+  activeViewerItem = null;
+}
+
+// 촬영 및 갤러리 미디어 업로드 처리 파이프라인
+async function handleMediaUpload(files, forcedType) {
+  if (!files || files.length === 0) return;
+
+  const progressBox = document.getElementById('album-progress-box');
+  const progressText = document.getElementById('album-progress-text');
+  const progressFill = document.getElementById('album-progress-fill');
+  const progressPercent = document.getElementById('album-progress-percent');
+
+  if (progressBox) progressBox.style.display = 'block';
+
+  const total = files.length;
+  let successCount = 0;
+
+  for (let i = 0; i < total; i++) {
+    const file = files[i];
+    const pct = Math.round(((i + 1) / total) * 100);
+    if (progressText) progressText.innerText = `추억 저장 중... (${i + 1}/${total}) ⏳`;
+    if (progressPercent) progressPercent.innerText = `${pct}%`;
+    if (progressFill) progressFill.style.width = `${pct}%`;
+
+    try {
+      const isVideo = forcedType === 'video' || (file.type && file.type.startsWith('video/'));
+      const id = 'media_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+
+      if (isVideo) {
+        // 비디오: Blob으로 IndexedDB에 영구 보존
+        const item = {
+          id: id,
+          type: 'video',
+          data: file, // File은 Blob 상속
+          name: file.name || '동영상',
+          timestamp: Date.now()
+        };
+        await saveAlbumMedia(item);
+        successCount++;
+      } else {
+        // 사진: 캔버스 압축 후 DataURL로 IndexedDB에 저장
+        const dataUrl = await compressImage(file);
+        const item = {
+          id: id,
+          type: 'image',
+          data: dataUrl,
+          name: file.name || '사진',
+          timestamp: Date.now()
+        };
+        await saveAlbumMedia(item);
+        successCount++;
+      }
+    } catch(err) {
+      console.error('File save error:', err);
+    }
+  }
+
+  if (progressBox) progressBox.style.display = 'none';
+
+  if (successCount > 0) {
+    showToast(`🎉 ${successCount}개의 소중한 추억이 앨범에 저장되었습니다!`);
+    await renderAlbumFeed();
+  } else {
+    showToast('⚠️ 파일 저장에 실패했습니다. 다시 시도해 주세요.');
   }
 }
 
-// ✏️ 빠른 단어 직접 입력 해설 검색기 (구글 고품질 번역 연동)
-async function executePhotoTextLookup(query) {
-  if (!query || !query.trim()) return;
-  const clean = query.trim();
-
-  const resultBox = document.getElementById('photo-result-box');
-  const resLinesContainer = document.getElementById('photo-lines-container');
-  const resOriginal = document.getElementById('photo-res-original');
-  const resTranslated = document.getElementById('photo-res-translated');
-  const resExplanation = document.getElementById('photo-res-explanation');
-  const itemCountBadge = document.getElementById('photo-item-count-badge');
-
-  showToast('⏳ 구글 고품질 번역 & 150+ 백과사전 조회 중...');
-
-  const { translated, reading } = await translateJaToKoWithGoogle(clean);
-  const finalKo = translated || clean;
-  const priceInfo = extractPriceInfo(clean);
-  const matchedKnowledge = findKnowledgeMatches(`${clean} ${finalKo}`);
-
-  const lineItem = [{
-    ja: clean,
-    ko: finalKo,
-    reading: reading,
-    priceInfo: priceInfo,
-    matchedKnowledge: matchedKnowledge
-  }];
-
-  const explHtml = generateTravelExplanation(clean, finalKo, lineItem);
-
-  lastPhotoOriginalJa = clean;
-  lastPhotoTranslatedKo = finalKo;
-
-  if (resultBox) {
-    resultBox.style.display = 'block';
-    if (itemCountBadge) itemCountBadge.innerText = '단어 정밀 분석 완료';
-    if (resLinesContainer) renderMenuLines(lineItem, resLinesContainer);
-    if (resOriginal) resOriginal.innerText = clean;
-    if (resTranslated) resTranslated.innerText = finalKo;
-    if (resExplanation) resExplanation.innerHTML = explHtml;
-    resultBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }
-}
 
 function setupEventListeners() {
   // 5개 탭 전환
@@ -4551,42 +4579,74 @@ function setupEventListeners() {
     });
   });
 
-  // 📸 사진 촬영 & 갤러리 글자 해석(OCR) 및 여행 설명 이벤트 리스너 바인딩
-  const photoFileInput = document.getElementById('photo-file-input');
-  const photoCameraBtn = document.getElementById('photo-camera-btn');
-  if (photoCameraBtn && photoFileInput) {
-    photoCameraBtn.addEventListener('click', () => {
+  // 📸 둘만의 여행 앨범 사진 & 동영상 이벤트 바인딩
+  const albumTakePhotoBtn = document.getElementById('album-take-photo-btn');
+  const albumCameraInput = document.getElementById('album-camera-input');
+  if (albumTakePhotoBtn && albumCameraInput) {
+    albumTakePhotoBtn.addEventListener('click', () => {
       unlockAudio();
-      photoFileInput.click();
+      albumCameraInput.click();
     });
-  }
-  if (photoFileInput) {
-    photoFileInput.addEventListener('change', function(e) {
-      if (e.target.files && e.target.files[0]) {
-        processPhotoFile(e.target.files[0]);
+    albumCameraInput.addEventListener('change', function(e) {
+      if (e.target.files && e.target.files.length > 0) {
+        handleMediaUpload(e.target.files, 'image');
       }
       this.value = '';
     });
   }
 
-  const galleryFileInput = document.getElementById('gallery-file-input');
-  const galleryFileBtn = document.getElementById('gallery-file-btn');
-  if (galleryFileBtn && galleryFileInput) {
-    galleryFileBtn.addEventListener('click', () => {
+  const albumTakeVideoBtn = document.getElementById('album-take-video-btn');
+  const albumVideoInput = document.getElementById('album-video-input');
+  if (albumTakeVideoBtn && albumVideoInput) {
+    albumTakeVideoBtn.addEventListener('click', () => {
       unlockAudio();
-      galleryFileInput.click();
+      albumVideoInput.click();
     });
-  }
-  if (galleryFileInput) {
-    galleryFileInput.addEventListener('change', function(e) {
-      if (e.target.files && e.target.files[0]) {
-        processPhotoFile(e.target.files[0]);
+    albumVideoInput.addEventListener('change', function(e) {
+      if (e.target.files && e.target.files.length > 0) {
+        handleMediaUpload(e.target.files, 'video');
       }
       this.value = '';
     });
   }
 
-  // 🗺️ 길찾기 & 지도 탭으로 즉시 전환하는 큼직한 네모 카드 버튼 (v9.6)
+  const albumPickGalleryBtn = document.getElementById('album-pick-gallery-btn');
+  const albumGalleryInput = document.getElementById('album-gallery-input');
+  if (albumPickGalleryBtn && albumGalleryInput) {
+    albumPickGalleryBtn.addEventListener('click', () => {
+      unlockAudio();
+      albumGalleryInput.click();
+    });
+    albumGalleryInput.addEventListener('change', function(e) {
+      if (e.target.files && e.target.files.length > 0) {
+        handleMediaUpload(e.target.files);
+      }
+      this.value = '';
+    });
+  }
+
+  // 8. 미디어 뷰어 모달 닫기 & 삭제 이벤트 바인딩
+  const viewerCloseBtn = document.getElementById('media-viewer-close-btn');
+  const viewerBackdrop = document.getElementById('media-viewer-backdrop');
+  const viewerDeleteBtn = document.getElementById('media-viewer-delete-btn');
+
+  if (viewerCloseBtn) viewerCloseBtn.addEventListener('click', closeMediaViewer);
+  if (viewerBackdrop) viewerBackdrop.addEventListener('click', closeMediaViewer);
+
+  if (viewerDeleteBtn) {
+    viewerDeleteBtn.addEventListener('click', async () => {
+      if (activeViewerItem) {
+        if (confirm('이 여행 추억을 삭제할까요?')) {
+          await deleteAlbumMedia(activeViewerItem.id);
+          closeMediaViewer();
+          showToast('🗑️ 추억이 삭제되었습니다.');
+          renderAlbumFeed();
+        }
+      }
+    });
+  }
+
+  // 🗺️ 길찾기 & 지도 탭으로 즉시 전환하는 큼직한 네모 카드 버튼
   const quickMapBtn = document.getElementById('quick-nav-map-btn');
   if (quickMapBtn) {
     quickMapBtn.addEventListener('click', () => {
@@ -4612,114 +4672,6 @@ function setupEventListeners() {
   if (micGuideModal) {
     micGuideModal.addEventListener('click', (e) => {
       if (e.target === micGuideModal) closeMicGuide();
-    });
-  }
-
-  // 메뉴판 핵심 단어 퀵 칩 터치 이벤트
-  document.querySelectorAll('.photo-quick-chip').forEach(chip => {
-    chip.addEventListener('click', () => {
-      const word = chip.dataset.word;
-      if (word) {
-        unlockAudio();
-        executePhotoTextLookup(word);
-      }
-    });
-  });
-
-  const photoRetryBtn = document.getElementById('photo-retry-btn');
-  if (photoRetryBtn) {
-    photoRetryBtn.addEventListener('click', () => {
-      if (photoFileInput) photoFileInput.click();
-    });
-  }
-
-  const photoLookupBtn = document.getElementById('photo-lookup-btn');
-  const photoLookupInput = document.getElementById('photo-lookup-input');
-  if (photoLookupBtn && photoLookupInput) {
-    photoLookupBtn.addEventListener('click', () => {
-      executePhotoTextLookup(photoLookupInput.value);
-    });
-    photoLookupInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        executePhotoTextLookup(photoLookupInput.value);
-      }
-    });
-  }
-
-  const photoSpeakBtn = document.getElementById('photo-speak-btn');
-  if (photoSpeakBtn) {
-    photoSpeakBtn.addEventListener('click', () => {
-      if (lastPhotoOriginalJa) {
-        unlockAudio();
-        speakText(lastPhotoOriginalJa, 'ja');
-      } else {
-        showToast('일본어 텍스트가 없습니다.');
-      }
-    });
-  }
-
-  const photoCopyBtn = document.getElementById('photo-copy-btn');
-  if (photoCopyBtn) {
-    photoCopyBtn.addEventListener('click', () => {
-      if (lastPhotoTranslatedKo) {
-        const textToCopy = `${lastPhotoOriginalJa}\n\n[한국어 번역]\n${lastPhotoTranslatedKo}`;
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(textToCopy).then(() => {
-            showToast('📋 번역 내용이 복사되었습니다!');
-          }).catch(() => {
-            try {
-              const ta = document.createElement('textarea');
-              ta.value = textToCopy;
-              document.body.appendChild(ta);
-              ta.select();
-              document.execCommand('copy');
-              document.body.removeChild(ta);
-              showToast('📋 번역 내용이 복사되었습니다!');
-            } catch(e) {
-              prompt('번역 내용을 복사하세요:', textToCopy);
-            }
-          });
-        } else {
-          try {
-            const ta = document.createElement('textarea');
-            ta.value = textToCopy;
-            document.body.appendChild(ta);
-            ta.select();
-            document.execCommand('copy');
-            document.body.removeChild(ta);
-            showToast('📋 번역 내용이 복사되었습니다!');
-          } catch(e) {
-            prompt('번역 내용을 복사하세요:', textToCopy);
-          }
-        }
-      } else {
-        showToast('복사할 번역 내용이 없습니다.');
-      }
-    });
-  }
-
-  // 사진 번역 일본어 원문 단독 복사
-  const photoCopyJaBtn = document.getElementById('photo-copy-ja-btn');
-  if (photoCopyJaBtn) {
-    photoCopyJaBtn.addEventListener('click', () => {
-      if (lastPhotoOriginalJa) {
-        window.copyPhotoText(lastPhotoOriginalJa);
-      } else {
-        showToast('복사할 일본어 원문이 없습니다.');
-      }
-    });
-  }
-
-  // 사진 번역 한국어 번역 단독 복사
-  const photoCopyKoBtn = document.getElementById('photo-copy-ko-btn');
-  if (photoCopyKoBtn) {
-    photoCopyKoBtn.addEventListener('click', () => {
-      if (lastPhotoTranslatedKo) {
-        window.copyPhotoText(lastPhotoTranslatedKo);
-      } else {
-        showToast('복사할 한국어 번역이 없습니다.');
-      }
     });
   }
 
