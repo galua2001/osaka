@@ -2417,6 +2417,126 @@ body {
   margin-top: 10px;
 }
 
+/* 파파고 스타일 줄단위 메뉴 카드 */
+.photo-line-card {
+  background: #FFFFFF;
+  border: 1.5px solid #E2E8F0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.photo-line-card:hover {
+  border-color: #C084FC;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.08);
+}
+
+.photo-line-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.photo-line-ja {
+  font-size: 17px;
+  font-weight: 800;
+  color: #0F172A;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+}
+
+.photo-line-pron {
+  font-size: 12px;
+  font-weight: 700;
+  color: #DC2626;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.photo-line-ko {
+  font-size: 15px;
+  font-weight: 800;
+  color: #1E40AF;
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+
+.photo-line-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.photo-price-badge {
+  background: #FEF3C7;
+  color: #92400E;
+  font-size: 11.5px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid #FCD34D;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.photo-tax-badge {
+  background: #F1F5F9;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 6px;
+  border-radius: 6px;
+}
+
+.photo-line-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.photo-btn-mini {
+  background: #F8FAFC;
+  border: 1px solid #CBD5E1;
+  color: #334155;
+  border-radius: 8px;
+  padding: 5px 9px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.photo-btn-mini:active {
+  background: #E2E8F0;
+  transform: scale(0.96);
+}
+
+.photo-btn-mini.order-btn {
+  background: #EFF6FF;
+  border-color: #BFDBFE;
+  color: #1D4ED8;
+}
+
+.photo-btn-mini.order-btn:hover {
+  background: #DBEAFE;
+}
+
+.photo-lens-quick-card:active {
+  transform: scale(0.97);
+}
+
 /* 수동 단어 입력 검색기 */
 .photo-manual-lookup {
   margin-top: 14px;
