@@ -8,10 +8,10 @@
   <meta http-equiv="Expires" content="0">
   <title>OsakaGo - 오사카 여행 일본어 번역기 & 길찾기 지도 & 맛집 가이드</title>
 
-  <!-- 강력한 모바일 캐시 영구 파괴 & v9.5 자동 강제 새로고침 엔진 -->
+  <!-- 강력한 모바일 캐시 영구 파괴 & v9.6 자동 강제 새로고침 엔진 -->
   <script>
     (function() {
-      var CURRENT_VERSION = '9.5';
+      var CURRENT_VERSION = '9.6';
       var urlParams = new URLSearchParams(window.location.search);
       // URL에 최신 버전 태그가 없으면 즉시 캐시를 뚫고 강제 새로고침 리다이렉트
       if (urlParams.get('v') !== CURRENT_VERSION) {
@@ -70,7 +70,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   
   <!-- 앱 스타일시트 -->
-  <link rel="stylesheet" href="style.css?v=9.5">
+  <link rel="stylesheet" href="style.css?v=9.6">
   <link rel="icon" href="icon-192.png">
 </head>
 <body>
@@ -83,7 +83,7 @@
       <div class="header-badge">
         <span>🇯🇵</span>
         <span>OSAKA TRAVEL COMPANION</span>
-        <span class="header-version-badge" id="header-version-badge">v9.5</span>
+        <span class="header-version-badge" id="header-version-badge">v9.6</span>
       </div>
       <div class="header-title-row">
         <div>
@@ -93,16 +93,16 @@
           </h1>
           <p class="header-subtitle">오사카 여행 · 파파고 통역 · 길찾기 지도 · 현지 맛집</p>
         </div>
-        <span class="header-subbadge">v9.5</span>
+        <span class="header-subbadge">v9.6</span>
       </div>
     </header>
 
     <!-- 🔥 스마트폰 캐시 탈출 & 최신 버전 즉시 동기화 바 -->
-    <div class="force-refresh-bar" onclick="window.location.replace(window.location.origin+window.location.pathname+'?v=9.5&t='+Date.now())" style="background: linear-gradient(135deg, #1E40AF, #2563EB); border-radius: 14px; margin: 10px 16px 6px 16px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; box-shadow: 0 4px 12px rgba(37,99,235,0.25);">
+    <div class="force-refresh-bar" onclick="window.location.replace(window.location.origin+window.location.pathname+'?v=9.6&t='+Date.now())" style="background: linear-gradient(135deg, #1E40AF, #2563EB); border-radius: 14px; margin: 10px 16px 6px 16px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; box-shadow: 0 4px 12px rgba(37,99,235,0.25);">
       <div style="display: flex; align-items: center; gap: 10px;">
         <span style="font-size: 22px;">🚀</span>
         <div style="text-align: left;">
-          <div style="font-size: 13.5px; font-weight: 800; color: #FFFFFF;">최신 v9.5 완전 동기화 (스퀘어 음성번역 & 초깔끔 결과 UI)!</div>
+          <div style="font-size: 13.5px; font-weight: 800; color: #FFFFFF;">최신 v9.6 완전 동기화 (초심플 다이어트 & 원터치 지도 버튼)!</div>
           <div style="font-size: 11px; color: #BFDBFE;">터치 시 캐시 삭제 & 최신 동기화 🔄</div>
         </div>
       </div>
@@ -305,75 +305,19 @@
               </button>
             </div>
           </div>
-
-          <!-- 메뉴판 대표 핵심 단어 퀵 칩 (터치 즉시 발음+해석+설명) -->
-          <div class="photo-quick-chips-section">
-            <div class="photo-quick-chips-title">💡 메뉴판에 이 단어가 보이나요? (터치 즉시 설명)</div>
-            <div class="photo-quick-chips-list">
-              <button class="photo-quick-chip" data-word="替玉">🍜 替玉 (면 추가)</button>
-              <button class="photo-quick-chip" data-word="お通し">🍢 お通し (기본 자릿세)</button>
-              <button class="photo-quick-chip" data-word="税込">🏷️ 税込 (세금 포함)</button>
-              <button class="photo-quick-chip" data-word="税抜">⚠️ 税抜 (세금 별도)</button>
-              <button class="photo-quick-chip" data-word="豚骨">🍲 豚骨 (돈코츠 돼지뼈)</button>
-              <button class="photo-quick-chip" data-word="生ビール">🍺 生ビール (생맥주)</button>
-              <button class="photo-quick-chip" data-word="味玉">🥚 味玉 (맛달걀)</button>
-              <button class="photo-quick-chip" data-word="おすすめ">⭐ おすすめ (추천메뉴)</button>
-              <button class="photo-quick-chip" data-word="現金のみ">💵 現金のみ (현금만 가능)</button>
-              <button class="photo-quick-chip" data-word="会計">🧾 会計 (계산하기)</button>
-              <button class="photo-quick-chip" data-word="禁煙">🚭 禁煙 (금연석)</button>
-              <button class="photo-quick-chip" data-word="ハイボール">🥃 ハイボール (하이볼)</button>
-            </div>
-          </div>
-
-          <!-- 빠른 단어 직접 입력 해설 검색기 -->
-          <div class="photo-manual-lookup">
-            <div class="lookup-header">
-              <span>✏️ 사진 대신 글자를 직접 입력해서 설명받기:</span>
-            </div>
-            <div class="lookup-input-row">
-              <input type="text" id="photo-lookup-input" placeholder="일본어 단어 입력 (예: 替玉, お通し, 税込, 豚骨)" class="lookup-input">
-              <button id="photo-lookup-btn" class="lookup-btn">해석 & 설명</button>
-            </div>
-          </div>
         </div>
 
-        <!-- 🦜 2. 네이버 파파고 공식 어플(앱) 및 구글 번역 카드 -->
-        <div class="papago-app-launch-card">
-          <div class="papago-app-header">
-            <span class="papago-app-badge">🦜 네이버 파파고 공식 앱</span>
-            <span class="papago-app-tag">음성 마이크 지원</span>
-          </div>
-
-          <!-- 마이크 미표시 원인 친절 안내 -->
-          <div class="papago-mic-guide-box">
-            <div style="font-weight: 800; color: #991B1B; margin-bottom: 4px;">⚠️ 마이크 모양이 안 보이는 이유 필독!</div>
-            <div style="font-size: 11.5px; color: #7F1D1D; line-height: 1.5;">
-              네이버 정책상 <strong>인터넷 창(모바일 웹)에서는 마이크 기능을 아예 막아두었습니다.</strong><br>
-              마이크(음성 대화)를 쓰시려면 폰에 <strong>[파파고 앱]이 설치</strong>되어 있어야 합니다.<br>
-              (※ 앱 설치가 귀찮으시면 <strong>위의 OsakaGo 자체 음성 통역(한국어/일본어 2개 버튼)</strong>을 쓰시면 설치 없이 즉시 마이크가 100% 잘 됩니다!)
+        <!-- 🗺️ 오사카 길찾기 & 지도 열기 큼직한 네모 카드 버튼 -->
+        <button type="button" id="quick-nav-map-btn" class="quick-nav-map-card">
+          <div class="quick-map-badge">⚡ 원터치 오사카 길찾기</div>
+          <div class="quick-map-content">
+            <span class="quick-map-icon">🗺️</span>
+            <div class="quick-map-texts">
+              <span class="quick-map-title">오사카 길찾기 & 지도 열기</span>
+              <span class="quick-map-sub">도톤보리 · USJ · 우메다 · 맛집 실시간 지도 & 빠른 길안내 ➔</span>
             </div>
           </div>
-
-          <div style="display: flex; flex-direction: column; gap: 8px;">
-            <!-- 1) 설치된 파파고 앱 직접 열기 (런처 인텐트) -->
-            <a href="intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.naver.labs.translator;end" class="papago-direct-app-btn" id="papago-direct-app-btn">
-              <span style="font-size: 20px;">🤖</span>
-              <span>1. [설치된 파파고 앱] 바로 열기 (마이크 지원) ➔</span>
-            </a>
-
-            <!-- 2) 파파고 앱 미설치 시 플레이스토어 / 앱스토어 설치 바로가기 -->
-            <a href="https://play.google.com/store/apps/details?id=com.naver.labs.translator" target="_blank" class="papago-market-btn" id="papago-market-btn">
-              <span>📲</span>
-              <span>2. [파파고 앱 설치하기] (Play스토어 이동)</span>
-            </a>
-
-            <!-- 3) 웹에서도 마이크가 지원되는 구글 번역기 링크 -->
-            <a href="https://translate.google.com/?sl=ko&tl=ja&op=translate" target="_blank" class="google-trans-web-btn">
-              <span>🌐</span>
-              <span>3. [구글 번역기 열기] (인터넷 창에서도 마이크 지원)</span>
-            </a>
-          </div>
-        </div>
+        </button>
 
       </section>
 
@@ -721,7 +665,7 @@
   <!-- Tesseract.js (일본어 사진 고속 OCR 엔진) -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <!-- 메인 앱 스크립트 연결 -->
-  <script src="app.js?v=9.5"></script>
+  <script src="app.js?v=9.6"></script>
 
   <!-- PWA 서비스 워커 관리 및 앱 설치 제어 -->
   <script>

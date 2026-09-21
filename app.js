@@ -2,7 +2,7 @@
    OsakaGo - 오사카 여행 번역기 & 음성 길찾기 & 맛집 가이드 메인 스크립트
    ========================================================================== */
 
-const CURRENT_VERSION = '9.5';
+const CURRENT_VERSION = '9.6';
 
 // 전역 상태
 const state = {
@@ -4583,6 +4583,20 @@ function setupEventListeners() {
         processPhotoFile(e.target.files[0]);
       }
       this.value = '';
+    });
+  }
+
+  // 🗺️ 길찾기 & 지도 탭으로 즉시 전환하는 큼직한 네모 카드 버튼 (v9.6)
+  const quickMapBtn = document.getElementById('quick-nav-map-btn');
+  if (quickMapBtn) {
+    quickMapBtn.addEventListener('click', () => {
+      unlockAudio();
+      const mapNavBtn = document.querySelector('.nav-item[data-tab="map"]');
+      if (mapNavBtn) {
+        mapNavBtn.click();
+      } else if (typeof switchTab === 'function') {
+        switchTab('map');
+      }
     });
   }
 

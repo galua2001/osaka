@@ -2727,3 +2727,94 @@ body {
   transform: scale(0.96);
 }
 
+/* ==========================================================================
+   오사카 길찾기 & 지도 큼직한 네모 카드 바로가기 버튼 (v9.6)
+   ========================================================================== */
+#quick-nav-map-btn,
+.quick-nav-map-card {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: linear-gradient(135deg, #059669 0%, #047857 50%, #064E3B 100%);
+  border: 2px solid #10B981;
+  border-radius: 16px;
+  padding: 16px 18px;
+  margin-top: 14px;
+  margin-bottom: 20px;
+  color: #FFFFFF;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(5, 150, 105, 0.28), 0 2px 6px rgba(0, 0, 0, 0.08);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.2s ease;
+  position: relative;
+  overflow: hidden;
+  font-family: inherit;
+}
+
+#quick-nav-map-btn:hover,
+.quick-nav-map-card:hover {
+  background: linear-gradient(135deg, #047857 0%, #065F46 50%, #022C22 100%);
+  box-shadow: 0 8px 22px rgba(5, 150, 105, 0.38);
+}
+
+#quick-nav-map-btn:active,
+.quick-nav-map-card:active {
+  transform: scale(0.98);
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.2);
+}
+
+.quick-map-badge {
+  display: inline-flex;
+  align-self: flex-start;
+  background: rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(4px);
+  color: #ECFDF5;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 9px;
+  border-radius: 8px;
+  letter-spacing: -0.2px;
+}
+
+.quick-map-content {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.quick-map-icon {
+  font-size: 34px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.18));
+  flex-shrink: 0;
+}
+
+.quick-map-texts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.quick-map-title {
+  font-size: 16.5px;
+  font-weight: 800;
+  color: #FFFFFF;
+  letter-spacing: -0.3px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.quick-map-sub {
+  font-size: 12px;
+  font-weight: 500;
+  color: #A7F3D0;
+  line-height: 1.4;
+  white-space: normal;
+  word-break: keep-all;
+}
+
+
