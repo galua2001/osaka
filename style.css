@@ -2746,7 +2746,7 @@ body {
 
 
 /* ==========================================================================
-   오사카 길찾기 & 지도 큼직한 네모 카드 바로가기 버튼 (v9.6)
+   구글 지도(Google Maps) 실시간 길찾기 큼직한 네모 카드 바로가기 버튼 (v9.8)
    ========================================================================== */
 #quick-nav-map-btn,
 .quick-nav-map-card {
@@ -2755,45 +2755,48 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  background: linear-gradient(135deg, #059669 0%, #047857 50%, #064E3B 100%);
-  border: 2px solid #10B981;
+  background: linear-gradient(135deg, #0F9D58 0%, #0284C7 52%, #1A73E8 100%);
+  border: 2px solid rgba(255, 255, 255, 0.28);
   border-radius: 16px;
-  padding: 16px 18px;
+  padding: 16px;
   margin-top: 14px;
   margin-bottom: 20px;
   color: #FFFFFF;
   text-align: left;
   cursor: pointer;
-  box-shadow: 0 6px 18px rgba(5, 150, 105, 0.28), 0 2px 6px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 24px rgba(2, 132, 199, 0.32), 0 2px 8px rgba(15, 157, 88, 0.18);
   transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.2s ease;
   position: relative;
   overflow: hidden;
   font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #quick-nav-map-btn:hover,
 .quick-nav-map-card:hover {
-  background: linear-gradient(135deg, #047857 0%, #065F46 50%, #022C22 100%);
-  box-shadow: 0 8px 22px rgba(5, 150, 105, 0.38);
+  background: linear-gradient(135deg, #0B8043 0%, #0369A1 52%, #1557B0 100%);
+  box-shadow: 0 10px 28px rgba(2, 132, 199, 0.42), 0 4px 12px rgba(15, 157, 88, 0.24);
 }
 
 #quick-nav-map-btn:active,
 .quick-nav-map-card:active {
   transform: scale(0.98);
-  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.2);
+  box-shadow: 0 3px 10px rgba(2, 132, 199, 0.25);
 }
 
 .quick-map-badge {
   display: inline-flex;
   align-self: flex-start;
-  background: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.24);
   backdrop-filter: blur(4px);
-  color: #ECFDF5;
-  font-size: 11px;
+  -webkit-backdrop-filter: blur(4px);
+  color: #FFFFFF;
+  font-size: 11.5px;
   font-weight: 800;
-  padding: 3px 9px;
+  padding: 4px 10px;
   border-radius: 8px;
   letter-spacing: -0.2px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
 .quick-map-content {
@@ -2805,7 +2808,7 @@ body {
 .quick-map-icon {
   font-size: 34px;
   line-height: 1;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.18));
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.22));
   flex-shrink: 0;
 }
 
@@ -2823,13 +2826,13 @@ body {
   letter-spacing: -0.3px;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
 }
 
 .quick-map-sub {
   font-size: 12px;
   font-weight: 500;
-  color: #A7F3D0;
+  color: #E0F2FE;
   line-height: 1.4;
   white-space: normal;
   word-break: keep-all;

@@ -2,7 +2,7 @@
    OsakaGo - 오사카 여행 번역기 & 음성 길찾기 & 맛집 가이드 메인 스크립트
    ========================================================================== */
 
-const CURRENT_VERSION = '9.7';
+const CURRENT_VERSION = '9.8';
 
 // 전역 상태
 const state = {
@@ -4646,17 +4646,52 @@ function setupEventListeners() {
     });
   }
 
-  // 🗺️ 길찾기 & 지도 탭으로 즉시 전환하는 큼직한 네모 카드 버튼
+  // ==========================================================================
+  // 🗺️ 구글 지도(Google Maps) 실시간 길찾기 딥링크 / 웹 연동 엔진 (v9.8)
+  // ==========================================================================
+  function openGoogleMapsLive() {
+    showToast('🗺️ 구글 지도 길찾기를 실행합니다...');
+
+    const userAgent = navigator.userAgent || navigator.vendor || window.opera || '';
+    const isAndroid = /Android/i.test(userAgent);
+    const isIOS = (/iPad|iPhone|iPod/.test(userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) && !window.MSStream;
+
+    if (isAndroid) {
+      // 안드로이드: 구글 지도 공식 앱 인텐트 실행 (미설치 시 웹 브라우저 fallback)
+      const intentUrl = 'intent://maps.google.com/maps?hl=ko#Intent;scheme=https;package=com.google.android.apps.maps;S.browser_fallback_url=https%3A%2F%2Fwww.google.com%2Fmaps%3Fhl%3Dko;end';
+      try {
+        window.location.href = intentUrl;
+      } catch (err) {
+        window.location.href = 'https://www.google.com/maps?hl=ko';
+      }
+      return;
+    }
+
+    if (isIOS) {
+      // iOS: comgooglemaps 커스텀 URL 스킴 호출 후 미설치 시 웹 fallback
+      const gmapsScheme = 'comgooglemaps://?directionsmode=transit';
+      const fallbackWebUrl = 'https://www.google.com/maps?hl=ko';
+      const startTime = Date.now();
+      window.location.href = gmapsScheme;
+      setTimeout(() => {
+        if (Date.now() - startTime < 2000) {
+          window.location.href = fallbackWebUrl;
+        }
+      }, 1200);
+      return;
+    }
+
+    // PC 및 일반 브라우저: 구글 지도 공식 사이트(한국어) 새 창 열기
+    window.open('https://www.google.com/maps?hl=ko', '_blank', 'noopener,noreferrer');
+  }
+
+  // 🗺️ 구글 지도(Google Maps) 실시간 길찾기 큼직한 네모 카드 버튼 이벤트
   const quickMapBtn = document.getElementById('quick-nav-map-btn');
   if (quickMapBtn) {
-    quickMapBtn.addEventListener('click', () => {
+    quickMapBtn.addEventListener('click', (e) => {
+      e.preventDefault();
       unlockAudio();
-      const mapNavBtn = document.querySelector('.nav-item[data-tab="map"]');
-      if (mapNavBtn) {
-        mapNavBtn.click();
-      } else if (typeof switchTab === 'function') {
-        switchTab('map');
-      }
+      openGoogleMapsLive();
     });
   }
 
