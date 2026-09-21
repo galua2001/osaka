@@ -2028,35 +2028,38 @@ function startVoiceTurn(speakerLang) {
     const rec = new SpeechRecognition();
     voiceTurnRec = rec;
     rec.lang = speakerLang === 'ko' ? 'ko-KR' : 'ja-JP';
-    rec.continuous = true;
-    rec.interimResults = true; // 실시간 텍스트 피드백 활성화
+    rec.continuous = false; // 🛡️ 단일 턴 통역의 핵심: continuous=false로 설정하여 브라우저의 중복 누적 버그를 원천 차단!
+    rec.interimResults = true; // 말하는 동안 실시간 자막 피드백
 
     rec.onresult = (event) => {
-      // 이미 번역이 실행되었거나 세션이 종료되었으면 잔여 이벤트 무시
+      // 이미 번역이 실행되었거나 세션이 종료되었으면 무시
       if (isVoiceTurnDispatched || isTranslatingVoiceTurn || !activeVoiceSpeaker) return;
 
+      let finalTranscript = '';
       let interimTranscript = '';
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
+      for (let i = 0; i < event.results.length; ++i) {
         const result = event.results[i];
-        const transcript = result[0] ? result[0].transcript : '';
+        const text = result[0] ? result[0].transcript : '';
         if (result.isFinal) {
-          voiceTurnFinalBuffer += transcript;
+          finalTranscript += text;
         } else {
-          interimTranscript += transcript;
+          interimTranscript += text;
         }
       }
 
-      // 전체 인식된 현재 텍스트 결합 (표준 Web Speech API 규격)
-      const currentSpoken = (voiceTurnFinalBuffer + interimTranscript).trim();
+      // 외부 변수에 누적(+=)하지 않고 이벤트마다 깨끗한 단일 문장 추출
+      let currentSpoken = (finalTranscript || interimTranscript || '').trim();
+      currentSpoken = deduplicateSpeechText(currentSpoken);
+
       if (currentSpoken) {
         voiceTurnBuffer = currentSpoken;
         if (streamText) streamText.innerText = `🗣️ "${currentSpoken}"`;
 
-        // ⏱️ 묵음 감지 타이머: 1.2초간 추가 발화가 없으면 자동으로 번역 실행 (딱 1회)
+        // ⏱️ 사용자가 말을 멈추었을 때 0.8초 후 자동 번역 트리거
         if (voiceSilenceTimer) clearTimeout(voiceSilenceTimer);
         voiceSilenceTimer = setTimeout(() => {
           stopVoiceTurn(true);
-        }, 1200);
+        }, 800);
       }
     };
 
@@ -2079,7 +2082,7 @@ function startVoiceTurn(speakerLang) {
         clearTimeout(voiceSilenceTimer);
         voiceSilenceTimer = null;
       }
-      // 세션이 끝났을 때: 아직 번역이 실행되지 않았고 인식된 텍스트가 있으면 1회 실행
+      // 음성 인식이 끝났을 때: 아직 번역되지 않은 발화가 있으면 1회만 실행
       if (!isVoiceTurnDispatched && activeVoiceSpeaker && voiceTurnBuffer.trim()) {
         stopVoiceTurn(true);
       } else if (!isVoiceTurnDispatched) {
@@ -2095,13 +2098,45 @@ function startVoiceTurn(speakerLang) {
   }
 }
 
+// 🛡️ 문장/단어 2번 반복 완벽 정제 엔진 (어미를 파괴하지 않고 순수 중복만 1개로 합침)
+function deduplicateSpeechText(str) {
+  if (!str) return '';
+  let s = str.trim();
+
+  // 1. 동일 문장이 앞뒤로 통째로 2번 반복된 경우 ("도톤보리 어디예요 도톤보리 어디예요" -> "도톤보리 어디예요")
+  const halfLen = Math.floor(s.length / 2);
+  for (let len = halfLen; len >= 2; len--) {
+    const part1 = s.substring(0, len).trim();
+    const part2 = s.substring(len).trim();
+    if (part1 && part1 === part2) {
+      return part1;
+    }
+  }
+
+  // 2. 단어/구절 단위로 연달아 2번 중복된 경우 ("안녕하세요 안녕하세요 화장실" -> "안녕하세요 화장실")
+  const words = s.split(/\s+/);
+  if (words.length >= 2) {
+    const dedup = [];
+    for (let i = 0; i < words.length; i++) {
+      if (i > 0 && words[i] === words[i - 1]) {
+        continue;
+      }
+      dedup.push(words[i]);
+    }
+    s = dedup.join(' ');
+  }
+
+  return s;
+}
+
 function stopVoiceTurn(doTranslate = false) {
   if (voiceSilenceTimer) {
     clearTimeout(voiceSilenceTimer);
     voiceSilenceTimer = null;
   }
 
-  const textToTranslate = (voiceTurnBuffer || voiceTurnFinalBuffer).trim();
+  const rawText = (voiceTurnBuffer || '').trim();
+  const textToTranslate = deduplicateSpeechText(rawText);
   const currentSpeaker = activeVoiceSpeaker;
 
   voiceTurnBuffer = '';
@@ -2110,7 +2145,6 @@ function stopVoiceTurn(doTranslate = false) {
 
   if (voiceTurnRec) {
     try {
-      // 모든 이벤트 리스너를 완전히 끊어서 백그라운드 재귀 콜백 원천 차단
       voiceTurnRec.onresult = null;
       voiceTurnRec.onerror = null;
       voiceTurnRec.onend = null;
@@ -2146,7 +2180,7 @@ function resetVoiceTurnUI() {
 }
 
 async function triggerVoiceTranslate(text, fromLang) {
-  const cleanText = (text || '').trim();
+  let cleanText = deduplicateSpeechText(text || '');
 
   // 빈 텍스트이거나 이미 번역 중이면 중복 실행 차단
   if (!cleanText || isTranslatingVoiceTurn) return;
