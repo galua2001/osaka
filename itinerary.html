@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🌸 둘만의 오사카·교토 맞춤 여행 플래너 (서점 & 공방·뜨개질·빈티지)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: #F8FAFC;
+      color: #1E293B;
+      line-height: 1.6;
+      padding-bottom: 80px;
+    }
+    .header-hero {
+      background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 50%, #EC4899 100%);
+      color: #FFF;
+      padding: 40px 20px 32px;
+      text-align: center;
+      box-shadow: 0 10px 25px rgba(124, 58, 237, 0.25);
+    }
+    .header-hero h1 {
+      font-size: 28px;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+    }
+    .header-hero p {
+      font-size: 15px;
+      opacity: 0.95;
+      max-width: 650px;
+      margin: 0 auto;
+    }
+    .container {
+      max-width: 860px;
+      margin: -20px auto 0;
+      padding: 0 16px;
+    }
+    .hotel-banner {
+      background: #FFF;
+      border-radius: 16px;
+      padding: 16px 20px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 24px;
+      border: 1px solid #E2E8F0;
+    }
+    @media (max-width: 600px) {
+      .hotel-banner { grid-template-columns: 1fr; }
+    }
+    .hotel-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .hotel-icon {
+      font-size: 28px;
+      background: #F1F5F9;
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .hotel-name { font-weight: 800; font-size: 14px; color: #0F172A; }
+    .hotel-desc { font-size: 12px; color: #64748B; margin-top: 2px; }
+
+    /* 옵션 셀렉터 */
+    .option-selector {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 640px) {
+      .option-selector { grid-template-columns: 1fr; }
+    }
+    .opt-btn {
+      background: #FFF;
+      border: 2px solid #E2E8F0;
+      border-radius: 16px;
+      padding: 16px 14px;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+    .opt-btn:hover { border-color: #CBD5E1; }
+    .opt-btn.active {
+      border-color: #EC4899;
+      background: #FFF1F2;
+      box-shadow: 0 4px 16px rgba(236, 72, 153, 0.15);
+    }
+    .opt-badge {
+      font-size: 10.5px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 8px;
+      display: inline-block;
+      margin-bottom: 6px;
+    }
+    .opt-btn.active .opt-badge {
+      background: #EC4899;
+      color: #FFF;
+    }
+    .opt-btn:not(.active) .opt-badge {
+      background: #E2E8F0;
+      color: #475569;
+    }
+    .opt-title {
+      font-size: 15px;
+      font-weight: 800;
+      color: #0F172A;
+      line-height: 1.35;
+      margin-bottom: 4px;
+    }
+    .opt-sub {
+      font-size: 11.5px;
+      color: #64748B;
+      line-height: 1.4;
+    }
+
+    /* 일차 탭 */
+    .day-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .day-tab-btn {
+      flex: 1;
+      min-width: 140px;
+      background: #FFF;
+      border: 1.5px solid #CBD5E1;
+      border-radius: 12px;
+      padding: 12px 10px;
+      text-align: center;
+      cursor: pointer;
+      font-weight: 800;
+      font-size: 13.5px;
+      color: #475569;
+      transition: all 0.2s;
+    }
+    .day-tab-btn.active {
+      background: #4F46E5;
+      border-color: #4F46E5;
+      color: #FFF;
+      box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+    }
+    .day-tab-btn span {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      opacity: 0.85;
+      margin-top: 2px;
+    }
+
+    /* 일정 카드 */
+    .day-summary-card {
+      background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%);
+      border: 1px solid #C7D2FE;
+      border-radius: 14px;
+      padding: 14px 18px;
+      margin-bottom: 20px;
+    }
+    .day-summary-title { font-weight: 900; font-size: 16px; color: #3730A3; }
+    .day-summary-desc { font-size: 13px; color: #4338CA; margin-top: 4px; }
+
+    .spot-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .spot-card {
+      background: #FFF;
+      border-radius: 16px;
+      padding: 18px 20px;
+      border: 1px solid #E2E8F0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      transition: transform 0.15s ease;
+    }
+    .spot-card:hover { transform: translateY(-2px); }
+    .spot-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 8px;
+    }
+    .spot-time {
+      font-size: 12px;
+      font-weight: 800;
+      color: #4F46E5;
+      background: #EEF2FF;
+      padding: 3px 8px;
+      border-radius: 6px;
+      display: inline-block;
+      margin-bottom: 4px;
+    }
+    .spot-name {
+      font-size: 18px;
+      font-weight: 900;
+      color: #0F172A;
+    }
+    .spot-name-ja {
+      font-size: 12.5px;
+      color: #64748B;
+      font-weight: 600;
+    }
+    .spot-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 8px 0 12px;
+    }
+    .tag {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+    .tag-yarn { background: #FCE7F3; color: #BE185D; border: 1px solid #FBCFE8; }
+    .tag-book { background: #E0E7FF; color: #3730A3; border: 1px solid #C7D2FE; }
+    .tag-vintage { background: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; }
+    .tag-cafe { background: #DCFCE7; color: #166534; border: 1px solid #BBF7D0; }
+    .tag-culture { background: #F3E8FF; color: #6B21A8; border: 1px solid #E9D5FF; }
+
+    .spot-desc {
+      font-size: 13.5px;
+      color: #334155;
+      line-height: 1.6;
+      margin-bottom: 12px;
+    }
+    .wife-box {
+      background: #FFF1F2;
+      border: 1px solid #FECDD3;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 12.5px;
+      color: #9F1239;
+      line-height: 1.55;
+      margin-bottom: 8px;
+    }
+    .husband-box {
+      background: #EFF6FF;
+      border: 1px solid #BFDBFE;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 12.5px;
+      color: #1E40AF;
+      line-height: 1.55;
+      margin-bottom: 10px;
+    }
+    .map-link-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 800;
+      color: #2563EB;
+      text-decoration: none;
+      padding: 6px 12px;
+      background: #F8FAFC;
+      border: 1px solid #CBD5E1;
+      border-radius: 8px;
+      transition: background 0.15s;
+    }
+    .map-link-btn:hover { background: #F1F5F9; }
+  </style>
+</head>
+<body>
+
+  <header class="header-hero">
+    <h1>🌸 둘만의 오사카 & 교토 4일 맞춤 여행 플래너</h1>
+    <p>남편의 <strong>감성 서점 탐방 📚</strong>과 아내의 <strong>뜨개질 실·공방·빈티지 패션 🧶👗</strong>을 완벽히 만족시키는 3대 추천 코스입니다.</p>
+  </header>
+
+  <div class="container">
+    
+    <!-- 숙소 정보 배너 -->
+    <div class="hotel-banner">
+      <div class="hotel-item">
+        <div class="hotel-icon">🏨</div>
+        <div>
+          <div class="hotel-name">교토 3박: Kyoto U-Bell hotel</div>
+          <div class="hotel-desc">주조역 도보권 · 피로를 푸는 대욕장 완비 (Day 1~3 숙소)</div>
+        </div>
+      </div>
+      <div class="hotel-item">
+        <div class="hotel-icon">🏨</div>
+        <div>
+          <div class="hotel-name">오사카 1박: The basement hotel osaka honmachi</div>
+          <div class="hotel-desc">혼마치역 15번 출구 앞 · 미나미센바 빈티지 거리 바로 앞 (Day 4 숙소)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3대 옵션 선택기 -->
+    <div class="option-selector">
+      <div class="opt-btn active" onclick="selectOption(1)">
+        <span class="opt-badge">추천 1위 ⭐⭐⭐</span>
+        <div class="opt-title">🧶 1. 감성 공방 & 뜨개질 실 성지 힐링형</div>
+        <div class="opt-sub">아브릴(AVRIL 털실 성지) + 케이분샤 세계 10대 서점 + 나카자키초 공방 골목</div>
+      </div>
+      <div class="opt-btn" onclick="selectOption(2)">
+        <span class="opt-badge">패션 & 빈티지</span>
+        <div class="opt-title">👗 2. 트렌디 패션 & 빈티지 쇼핑 집중형</div>
+        <div class="opt-sub">테라마치 구제 골목 + 미나미센바/오렌지스트리트 빈티지 종단 쇼핑</div>
+      </div>
+      <div class="opt-btn" onclick="selectOption(3)">
+        <span class="opt-badge">알찬 밸런스</span>
+        <div class="opt-title">⛩️ 3. 전통 사찰 50% + 공방/서점 50% 균형형</div>
+        <div class="opt-sub">청수사 & 철학의길 사찰 산책 + 오후 취향 공방·서점 탐방</div>
+      </div>
+    </div>
+
+    <!-- 일차 선택 탭 -->
+    <div class="day-tabs">
+      <div class="day-tab-btn active" onclick="selectDay(1)">Day 1<span>교토 산조도리</span></div>
+      <div class="day-tab-btn" onclick="selectDay(2)">Day 2<span>이치조지 서점&공방</span></div>
+      <div class="day-tab-btn" onclick="selectDay(3)">Day 3<span>교토 힐링&공방</span></div>
+      <div class="day-tab-btn" onclick="selectDay(4)">Day 4<span>오사카 공방&빈티지</span></div>
+    </div>
+
+    <!-- 일차 요약 배너 -->
+    <div class="day-summary-card">
+      <div class="day-summary-title" id="day-summary-title">Day 1 일정</div>
+      <div class="day-summary-desc" id="day-summary-desc">일정 설명이 표시됩니다.</div>
+    </div>
+
+    <!-- 스팟 목록 -->
+    <div class="spot-list" id="spot-list">
+      <!-- 자바스크립트로 렌더링 -->
+    </div>
+
+  </div>
+
+  <script>
+    const data = {
+      1: {
+        title: "🧶 감성 공방 & 뜨개질 실 성지 힐링형 (강력 추천)",
+        days: {
+          1: {
+            summaryTitle: "Day 1: 교토 입국 & 산조도리 예술 공방 첫걸음",
+            summaryDesc: "간사이 공항에서 교토 유벨 호텔 체크인 후 1916년 석조건물 사크라 빌딩과 아브릴(AVRIL) 뜨개질 털실 성지로 이동합니다.",
+            spots: [
+              {
+                time: "14:30 체크인",
+                name: "교토 유벨 호텔 (Kyoto U-Bell hotel)",
+                nameJa: "京都ユーベルホテル",
+                tags: ["tag-hotel", "🏨 숙소"],
+                desc: "교토 남부 주조역 도보권으로 조용하고 깔끔하며, 대욕장이 있어 여행의 피로를 풀기 좋습니다. 짐을 맡기고 가벼운 옷차림으로 산조로 출발합니다.",
+                wife: "💖 아내 취향: 짐 풀고 바로 산조도리 감성 골목으로 출발할 수 있어 편리해요!",
+                husband: "📚 남편 동행 팁: 지하철 가라스마선으로 가라스마오이케까지 직통 10분 소요됩니다."
+              },
+              {
+                time: "15:30 하이라이트",
+                name: "아브릴 산조점 (AVRIL 糸・手芸) & 사크라 빌딩",
+                nameJa: "AVRIL 三条店 (SACRAビル)",
+                tags: ["tag-yarn", "🧶 뜨개질/원사 성지"],
+                desc: "전 세계 뜨개질 애호가들의 성지! 1916년에 지어진 낭만적인 앤틱 석조 건물 SACRA 빌딩 3층에 위치하며 독창적인 아트 얀, 콘사, 위빙 키트가 가득합니다.",
+                wife: "💖 아내 취향: 한국에서 구하기 힘든 독특한 색감과 텍스처의 뜨개질 실들을 무게 단위(10g~)로 직접 만져보고 구매할 수 있어요!",
+                husband: "📚 남편 동행 팁: 건물 자체가 100년 넘은 문화재급 건축물이라 구경하는 재미가 쏠쏠합니다."
+              },
+              {
+                time: "17:00 필수 방문",
+                name: "노무라 테일러 본점 (Nomura Tailor)",
+                nameJa: "野村テーラー 四条本店",
+                tags: ["tag-yarn", "✂️ 3층 수예 백화점"],
+                desc: "시조도리에 위치한 3층 건물 전체가 원단, 부자재, 리본, 단추, 패브릭으로 채워진 교토 대표 핸드메이드 성지입니다.",
+                wife: "💖 아내 취향: 수만 가지 단추 컬렉션과 아기자기한 자수 와펜, 린넨/코튼 원단을 실물로 보고 영감을 얻을 수 있어요!",
+                husband: "📚 남편 동행 팁: 1~3층 엘리베이터가 있어 편안하게 둘러볼 수 있습니다."
+              },
+              {
+                time: "18:30 저녁 산책",
+                name: "가모가와 강변 & 폰토초 골목",
+                nameJa: "鴨川 & 先斗町",
+                tags: ["tag-cafe", "🌊 감성 산책 & 저녁"],
+                desc: "가모가와 강변을 따라 석양을 감상하며 폰토초의 고즈넉한 붉은 초롱 골목에서 오반자이(교토 가정식) 요리로 첫날을 로맨틱하게 마무리합니다.",
+                wife: "💖 아내 취향: 물소리 들으며 산책하고 골목 감성 사진 찍기 최고의 스팟입니다.",
+                husband: "📚 남편 동행 팁: 강변 스타벅스 산조오하시점 지하 테라스 뷰도 좋습니다."
+              }
+            ]
+          },
+          2: {
+            summaryTitle: "Day 2: 세계 10대 서점 '케이분샤' & 사쿄구 예술 골목 탐방",
+            summaryDesc: "영국 가디언지가 선정한 세계에서 가장 아름다운 서점 케이분샤와 조용한 동네 공방, 베이커리를 여유롭게 거닙니다.",
+            spots: [
+              {
+                time: "10:30 하이라이트",
+                name: "케이분샤 이치조지점 (恵文社 一乗寺店)",
+                nameJa: "恵文社 一乗寺店",
+                tags: ["tag-book", "📚 세계 10대 서점", "tag-yarn", "🎨 생활공예 소품"],
+                desc: "영국 가디언지 선정 '세계에서 가장 아름다운 10대 서점'. 서적뿐만 아니라 독특한 식기, 키친웨어, 핸드메이드 소품을 함께 큐레이션하여 부부가 함께 가기 완벽한 공간입니다.",
+                wife: "💖 아내 취향: 서점 안의 '생활관' 코너에 아기자기한 직조 소품, 린넨 키친크로스, 도자기 소품들이 가득해요!",
+                husband: "📚 남편 동행 팁: 인문, 예술, 디자인, 건축 독립출판물 컬렉션이 환상적입니다."
+              },
+              {
+                time: "12:30 점심 & 산책",
+                name: "이치조지 골목 베이커리 & 라멘가",
+                nameJa: "一乗寺 カフェ・パン巡り",
+                tags: ["tag-cafe", "🥐 동네 빵집 & 카페"],
+                desc: "케이분샤 주변은 교토에서 가장 사랑스러운 동네 빵집과 조용한 카페, 교토 1위 라멘 골목이 밀집해 있어 점심 식사하기 좋습니다.",
+                wife: "💖 아내 취향: 골목마다 숨겨진 빈티지 그릇점과 아담한 디저트 카페들이 너무 예뻐요.",
+                husband: "📚 남편 동행 팁: 정갈한 일본식 핸드드립 커피를 즐기며 방금 산 책을 읽기 좋습니다."
+              },
+              {
+                time: "15:00 쇼핑",
+                name: "테라마치 도리 빈티지 의류 거리",
+                nameJa: "寺町京極 商店街",
+                tags: ["tag-vintage", "👗 빈티지 의류 샵"],
+                desc: "시조 가와라마치로 이동하여 아케이드 상점가 골목 안쪽에 숨어있는 20여 개의 빈티지 셀렉트숍과 앤틱 샵을 둘러봅니다.",
+                wife: "💖 아내 취향: 상태 좋은 일본 및 유럽 빈티지 원피스, 니트 스웨터, 스카프 등 패션 아이템 득템 찬스!",
+                husband: "📚 남편 동행 팁: 바로 인근에 140년 전통의 서점 마루젠(MARUZEN) 교토 본점이 있습니다."
+              },
+              {
+                time: "17:00 아트 서점",
+                name: "교토 츠타야 서점 (T8 다카시마야)",
+                nameJa: "京都 蔦屋書店 (T8)",
+                tags: ["tag-book", "📚 현대미술 츠타야"],
+                desc: "시조 가와라마치 신축 T8 쇼핑몰 7~8층에 입점한 최신 츠타야 서점으로, 현대미술 작품 전시와 방대한 예술/패션 서적이 조화를 이룹니다.",
+                wife: "💖 아내 취향: 디자인/인테리어 영감을 주는 라이프스타일 잡화와 문구가 풍성해요.",
+                husband: "📚 남편 동행 팁: 스타벅스와 연결되어 있어 여유롭게 아트북을 감상할 수 있습니다."
+              }
+            ]
+          },
+          3: {
+            summaryTitle: "Day 3: 400년 전통 바늘 명가 & 단추 공방 & 카모가와 힐링",
+            summaryDesc: "교토 장인들이 대대로 이어온 전통 바늘·단추 공방과 치리멘 수예를 만나며 깊이 있는 힐링을 누립니다.",
+            spots: [
+              {
+                time: "10:30 전통 명가",
+                name: "미스야 바늘 본점 (みすや針)",
+                nameJa: "本家みすや針",
+                tags: ["tag-yarn", "🪡 400년 전통 수예 바늘"],
+                desc: "에도 시대부터 400년 동안 바늘만을 만들어 온 일본 최고봉의 명가. 천을 상하지 않게 부드럽게 통과하는 장인 바늘과 귀여운 동물/과일 핀쿠션이 유명합니다.",
+                wife: "💖 아내 취향: 뜨개질과 바느질을 좋아하는 사람이라면 누구나 감동하는 벚꽃 돗바늘, 귀여운 핀쿠션은 평생의 기념품!",
+                husband: "📚 남편 동행 팁: 산조 상점가 안쪽 정원이 딸린 고풍스러운 가옥에 숨겨져 있어 운치 있습니다."
+              },
+              {
+                time: "12:30 감성 디자인",
+                name: "미나 페르호넨 교토점 (mina perhonen)",
+                nameJa: "ミナ ペルホネン 京都",
+                tags: ["tag-yarn", "🦋 패브릭 & 자수 예술"],
+                desc: "일본 최고의 자수·패브릭 디자이너 미나 페르호넨의 교토 플래그십 샵. 1927년 쇼와 시대 타일 건물 안에 원단, 자수 패션, 단추, 그릇이 전시되어 있습니다.",
+                wife: "💖 아내 취향: 독보적인 자수 패브릭과 패션 아이템에서 엄청난 예술적 영감을 얻을 수 있어요!",
+                husband: "📚 남편 동행 팁: 건물 자체가 복고풍 타일과 아치형 창문으로 아름답습니다."
+              },
+              {
+                time: "14:30 빈티지 단추",
+                name: "이드 빈티지 부티크 (idola)",
+                nameJa: "イドラ (idola)",
+                tags: ["tag-vintage", "🔘 프랑스 빈티지 단추 & 비즈"],
+                desc: "프랑스를 비롯한 유럽 각지에서 수집한 앤틱/빈티지 단추, 글래스 비즈, 브로치 키트가 보석함처럼 진열된 아담한 공방샵입니다.",
+                wife: "💖 아내 취향: 직접 뜬 니트나 가디건에 달아줄 세상에 단 하나뿐인 빈티지 단추를 고르는 행복!",
+                husband: "📚 남편 동행 팁: 골목길 2층에 아늑하게 숨어있어 보물찾기하는 기분입니다."
+              },
+              {
+                time: "17:00 교토 마무리",
+                name: "교토 유벨 호텔 대욕장 온천 휴식 & 저녁",
+                nameJa: "京都ユーベルホテル 大浴場",
+                tags: ["tag-hotel", "♨️ 피로 회복 대욕장"],
+                desc: "3일간의 교토 공방 투어로 쌓인 피로를 호텔 대욕장에서 따뜻하게 풀고, 교토역 근처 맛있는 야키니쿠나 이자카야에서 교토의 마지막 밤을 보냅니다.",
+                wife: "💖 아내 취향: 내일 오사카로 넘어가기 전 뽀송뽀송하게 힐링하기 최고예요.",
+                husband: "📚 남편 동행 팁: 숙소 1층 라운지에서 커피 한잔하며 내일 오사카 일정을 체크해 보세요."
+              }
+            ]
+          },
+          4: {
+            summaryTitle: "Day 4: 오사카 이동 & 나카자키초 목조공방 골목 & 빈티지 종단 쇼핑",
+            summaryDesc: "오사카로 이동하여 목조 가옥 골목의 공방 지구 나카자키초와 우메다 츠타야, 호텔 앞 미나미센바 빈티지 거리를 즐깁니다.",
+            spots: [
+              {
+                time: "11:00 숙소 이동",
+                name: "더 베이스먼트 호텔 오사카 혼마치 체크인",
+                nameJa: "ザ・ベースメントホテル大阪本町",
+                tags: ["tag-hotel", "🏨 오사카 숙소"],
+                desc: "혼마치역 15번 출구 바로 앞의 세련된 호텔. 미나미센바 빈티지 거리의 북쪽 입구에 위치해 쇼핑 후 짐을 두고 다니기 최적입니다.",
+                wife: "💖 아내 취향: 호텔 문만 열고 남쪽으로 걸어가면 바로 예쁜 옷가게와 카페들이 펼쳐져요!",
+                husband: "📚 남편 동행 팁: 우메다(북쪽)와 난바(남쪽)의 딱 정중앙이라 이동 동선이 최고입니다."
+              },
+              {
+                time: "12:30 하이라이트",
+                name: "나카자키초 (中崎町) 레트로 목조공방 골목",
+                nameJa: "中崎町 レトロ古民家通り",
+                tags: ["tag-yarn", "🧶 자수·뜨개 공방", "tag-vintage", "👗 빈티지 골목"],
+                desc: "전쟁 피해를 입지 않은 100년 된 목조 나가야(나가야) 가옥 골목에 숨겨진 50여 개의 아기자기한 핸드메이드 공방, 자수 샵, 빈티지 셀렉트숍 밀집 지구!",
+                wife: "💖 아내 취향: 일본 현지 작가들의 손뜨개 소품, 핸드메이드 브로치, 리메이크 빈티지 옷들이 골목마다 가득해요!",
+                husband: "📚 남편 동행 팁: 고양이 그림 갤러리와 레트로 골목 풍경이 정겹고 사진 찍기 좋습니다."
+              },
+              {
+                time: "15:30 감성 서점",
+                name: "우메다 츠타야 서점 (루쿠아 9층)",
+                nameJa: "梅田 蔦屋書店 (LUCUA 9F)",
+                tags: ["tag-book", "📚 호텔 라운지형 서점"],
+                desc: "우메다 루쿠아 1100 9층 전체를 사용하는 럭셔리 라운지형 서점. 타원형 북스트리트를 따라 건축, 패션, 라이프스타일 서적이 가득합니다.",
+                wife: "💖 아내 취향: 서점 한편에 일본 및 글로벌 수예/핸드메이드 전문 서적과 디자인 굿즈가 충실해요!",
+                husband: "📚 남편 동행 팁: 스타벅스 커피를 들고 편안한 소파에 앉아 독서를 즐길 수 있습니다."
+              },
+              {
+                time: "17:30 빈티지 쇼핑",
+                name: "미나미센바 & 오렌지 스트리트",
+                nameJa: "南船場 & オレンジストリート",
+                tags: ["tag-vintage", "👗 패션 빈티지 로드"],
+                desc: "호텔 바로 앞 미나미센바에서 시작하여 신사이바시, 오렌지스트리트(타치바나도리)로 이어지는 일본 최고의 빈티지 패션 & 라이프스타일 거리 종단 쇼핑!",
+                wife: "💖 아내 취향: 하이엔드 아카이브 빈티지부터 감각적인 스트릿 샵까지 패션 인스피레이션의 정점!",
+                husband: "📚 남편 동행 팁: 호텔까지 걸어서 5~10분 거리라 쇼핑백을 들고 편하게 귀가할 수 있습니다."
+              }
+            ]
+          }
+        }
+      },
+      2: {
+        title: "👗 트렌디 패션 & 빈티지 쇼핑 집중형",
+        days: {
+          1: {
+            summaryTitle: "Day 1: 교토 테라마치 & 신쿄고쿠 빈티지 로드",
+            summaryDesc: "호텔 체크인 후 테라마치 도리의 20여 개 빈티지 구제 옷가게와 앤틱 소품샵을 집중 탐방합니다.",
+            spots: [
+              { time: "14:30", name: "교토 유벨 호텔 체크인", nameJa: "Kyoto U-Bell hotel", tags: ["tag-hotel", "🏨 숙소"], desc: "짐 보관 후 가라스마선 타고 시조 가와라마치로 이동", wife: "가벼운 차림으로 쇼핑 출격!", husband: "교토역 환승 편리" },
+              { time: "15:30", name: "테라마치 도리 빈티지 로드", nameJa: "寺町京極", tags: ["tag-vintage", "👗 빈티지 의류"], desc: "20여 개 빈티지 샵이 모여 있는 거리. 유럽/미국 수입 구제 명소", wife: "유니크한 니트/자켓 득템!", husband: "레트로 LP판 및 잡화 구경" },
+              { time: "17:30", name: "노무라 테일러 본점", nameJa: "野村テーラー", tags: ["tag-yarn", "✂️ 부자재 백화점"], desc: "패션 부자재, 리폼 단추, 희귀 원단 집중 쇼핑", wife: "패션 디테일 살려줄 단추 천국", husband: "3층 규모 쾌적한 쇼핑" }
+            ]
+          },
+          2: {
+            summaryTitle: "Day 2: 독립 서점 & 디자이너 부티크 산책",
+            summaryDesc: "교토 시청 앞 독립서점 세이코샤와 산조도리 근대건축 부티크 샵들을 둘러봅니다.",
+            spots: [
+              { time: "11:00", name: "세이코샤 독립 서점", nameJa: "誠光社", tags: ["tag-book", "📚 독립서점"], desc: "케이분샤 전 점장이 오픈한 감도 높은 큐레이션 독립 서점", wife: "감성 잡화와 디자인 서적", husband: "일본 독립출판의 정수" },
+              { time: "14:00", name: "산조도리 부티크 거리", nameJa: "三条通 レトロ建築", tags: ["tag-vintage", "🏛️ 앤틱 부티크"], desc: "붉은 벽돌 근대건축에 입점한 셀렉트숍과 디자이너 부티크", wife: "건축미와 패션이 어우러진 쇼핑", husband: "거리 풍경 감상" },
+              { time: "16:30", name: "마루젠 교토 본점", nameJa: "MARUZEN 京都本店", tags: ["tag-book", "📚 대형 아트북"], desc: "교토 BAL 지하에 위치한 교토 최대 규모의 종합 서점", wife: "아트/패션 잡지 코너", husband: "방대한 서적 컬렉션" }
+            ]
+          },
+          3: {
+            summaryTitle: "Day 3: 라이프스타일 샵 & 아브릴 털실 샵",
+            summaryDesc: "교토 BAL 빌딩의 세련된 라이프스타일 몰과 아브릴 산조점을 방문합니다.",
+            spots: [
+              { time: "11:00", name: "교토 BAL 라이프스타일 몰", nameJa: "京都BAL", tags: ["tag-vintage", "🛋️ 인테리어/패션"], desc: "투데이즈 스페셜, 앤틱 가구 등 일본 감성 라이프스타일의 집약체", wife: "키친웨어, 패션 소품 가득", husband: "세련된 공간 디자인" },
+              { time: "14:00", name: "아브릴 산조점 (AVRIL)", nameJa: "AVRIL 三条店", tags: ["tag-yarn", "🧶 털실 성지"], desc: "사크라 빌딩의 아트 얀 전문점", wife: "포인트로 쓸 유니크한 실 구입!", husband: "고즈넉한 앤틱 빌딩" }
+            ]
+          },
+          4: {
+            summaryTitle: "Day 4: 오사카 미나미센바 & 오렌지스트리트 종단 쇼핑",
+            summaryDesc: "호텔 바로 앞 미나미센바부터 오렌지스트리트까지 일본 최고의 빈티지 쇼핑 거리를 섭렵합니다.",
+            spots: [
+              { time: "11:00", name: "더 베이스먼트 호텔 혼마치 체크인", nameJa: "The basement hotel", tags: ["tag-hotel", "🏨 오사카 숙소"], desc: "미나미센바 바로 앞 숙소에 짐 보관", wife: "호텔 앞이 바로 패션 골목!", husband: "위치 최고" },
+              { time: "12:00", name: "미나미센바 ~ 오렌지스트리트", nameJa: "南船場・オレンジストリート", tags: ["tag-vintage", "👗 빈티지 성지"], desc: "수백 개 빈티지 샵과 편집샵이 늘어선 일본 스트릿 패션 성지", wife: "하루 종일 쇼핑해도 모자란 곳!", husband: "트렌디한 카페에서 휴식" },
+              { time: "16:00", name: "우메다 츠타야 서점", nameJa: "梅田 蔦屋書店", tags: ["tag-book", "📚 루쿠아 9층"], desc: "호텔 라운지형 서점에서 패션/예술 서적 감상", wife: "디자인 서적 감상", husband: "여유로운 커피와 독서" }
+            ]
+          }
+        }
+      },
+      3: {
+        title: "⛩️ 전통 문화 50% + 공방/서점 50% 밸런스형",
+        days: {
+          1: {
+            summaryTitle: "Day 1: 청수사 도자기 거리 & 저녁 산조 아브릴",
+            summaryDesc: "청수사(기요미즈데라)와 산넨자카 전통 공예 거리를 걷고 저녁에 산조 아브릴을 방문합니다.",
+            spots: [
+              { time: "14:30", name: "교토 유벨 호텔 체크인", nameJa: "Kyoto U-Bell hotel", tags: ["tag-hotel", "🏨 숙소"], desc: "짐 보관 후 청수사로 이동", wife: "쾌적한 출발", husband: "대욕장 완비" },
+              { time: "15:30", name: "기요미즈데라 & 산넨자카", nameJa: "清水寺・産寧坂", tags: ["tag-culture", "⛩️ 교토 대표 명소"], desc: "교토의 상징 청수사와 돌계단 골목의 전통 도자기, 치리멘 공예품 구경", wife: "전통 수예 소품과 도자기", husband: "탁 트인 교토 시내 뷰" },
+              { time: "18:00", name: "아브릴(AVRIL) & 노무라 테일러", nameJa: "AVRIL & 野村テーラー", tags: ["tag-yarn", "🧶 뜨개/원단"], desc: "산조도리로 이동하여 털실과 원단 쇼핑", wife: "오늘의 하이라이트 실 쇼핑!", husband: "폰토초에서 저녁 식사" }
+            ]
+          },
+          2: {
+            summaryTitle: "Day 2: 은각사 철학의길 공방 & 케이분샤 서점",
+            summaryDesc: "은각사와 철학의 길을 걸으며 고즈넉한 공방을 구경하고 오후엔 세계 10대 서점 케이분샤로 향합니다.",
+            spots: [
+              { time: "10:30", name: "은각사 & 철학의 길 공방 산책", nameJa: "銀閣寺・哲学の道", tags: ["tag-culture", "🌿 힐링 산책"], desc: "물길을 따라 아기자기한 목공예, 도자기 소품샵 구경", wife: "조용한 숲길과 감성 소품", husband: "고즈넉한 선종 사찰" },
+              { time: "14:00", name: "케이분샤 이치조지점", nameJa: "恵文社 一乗寺店", tags: ["tag-book", "📚 세계 10대 서점"], desc: "서적과 생활공예 잡화가 조화를 이루는 영감의 공간", wife: "식기와 키친패브릭 구경", husband: "원하던 최고의 서점 방문" }
+            ]
+          },
+          3: {
+            summaryTitle: "Day 3: 후시미이나리 여우신사 & 가와라마치 쇼핑",
+            summaryDesc: "붉은 도리이가 끝없이 이어지는 여우신사를 보고 오후엔 시조 가와라마치 츠타야 T8을 즐깁니다.",
+            spots: [
+              { time: "09:30", name: "후시미이나리 신사 (여우신사)", nameJa: "伏見稲荷大社", tags: ["tag-culture", "⛩️ 천개의 붉은 도리이"], desc: "호텔(주조역)에서 가까운 일본 최고의 사진 명소", wife: "인생 커플샷 남기기", husband: "신비로운 숲길 산책" },
+              { time: "14:00", name: "시조 가와라마치 츠타야 T8 & 빈티지샵", nameJa: "京都 蔦屋書店 T8", tags: ["tag-book", "📚 츠타야 서점", "tag-vintage", "👗 빈티지"], desc: "현대미술 츠타야 서점과 테라마치 상점가 쇼핑", wife: "빈티지 옷과 디자인 굿즈", husband: "아트북 감상" }
+            ]
+          },
+          4: {
+            summaryTitle: "Day 4: 오사카 나카자키초 공방골목 & 우메다 츠타야",
+            summaryDesc: "오사카로 이동하여 나카자키초 레트로 목조공방 골목과 우메다 츠타야 서점을 둘러봅니다.",
+            spots: [
+              { time: "11:00", name: "더 베이스먼트 호텔 혼마치 체크인", nameJa: "The basement hotel", tags: ["tag-hotel", "🏨 오사카 숙소"], desc: "미나미센바 인근 숙소 체크인", wife: "쇼핑하기 최적의 위치", husband: "교통 편리" },
+              { time: "12:30", name: "나카자키초 레트로 공방 골목", nameJa: "中崎町", tags: ["tag-yarn", "🧶 자수/뜨개공방"], desc: "옛 목조가옥 골목의 감성 핸드메이드 샵 탐방", wife: "아기자기한 공방 투어", husband: "레트로 골목 풍경" },
+              { time: "15:30", name: "우메다 츠타야 서점 & 미나미센바", nameJa: "梅田 蔦屋書店 & 南船場", tags: ["tag-book", "📚 츠타야 서점", "tag-vintage", "👗 빈티지"], desc: "루쿠아 9층 츠타야 서점과 호텔 앞 미나미센바 빈티지 거리 쇼핑", wife: "빈티지 패션 쇼핑", husband: "라운지 서점에서 독서" }
+            ]
+          }
+        }
+      }
+    };
+
+    let currentOption = 1;
+    let currentDay = 1;
+
+    function selectOption(opt) {
+      currentOption = opt;
+      document.querySelectorAll('.opt-btn').forEach((b, idx) => {
+        b.classList.toggle('active', (idx + 1) === opt);
+      });
+      render();
+    }
+
+    function selectDay(d) {
+      currentDay = d;
+      document.querySelectorAll('.day-tab-btn').forEach((b, idx) => {
+        b.classList.toggle('active', (idx + 1) === d);
+      });
+      render();
+    }
+
+    function render() {
+      const optData = data[currentOption];
+      const dayData = optData.days[currentDay];
+
+      document.getElementById('day-summary-title').innerText = dayData.summaryTitle;
+      document.getElementById('day-summary-desc').innerText = dayData.summaryDesc;
+
+      const listEl = document.getElementById('spot-list');
+      listEl.innerHTML = '';
+
+      dayData.spots.forEach(spot => {
+        const card = document.createElement('div');
+        card.className = 'spot-card';
+
+        let tagsHtml = '';
+        for (let i = 0; i < spot.tags.length; i += 2) {
+          const cls = spot.tags[i];
+          const txt = spot.tags[i+1] || cls;
+          tagsHtml += `<span class="tag ${cls}">${txt}</span>`;
+        }
+
+        const mapQuery = encodeURIComponent(spot.name + ' ' + (spot.nameJa || ''));
+        const mapUrl = `https://www.google.com/maps/search/?api=1&query=${mapQuery}`;
+
+        card.innerHTML = `
+          <div class="spot-header">
+            <div>
+              <span class="spot-time">${spot.time}</span>
+              <div class="spot-name">${spot.name}</div>
+              <div class="spot-name-ja">${spot.nameJa}</div>
+            </div>
+            <a href="${mapUrl}" target="_blank" class="map-link-btn">🗺️ 지도</a>
+          </div>
+          <div class="spot-tags">${tagsHtml}</div>
+          <div class="spot-desc">${spot.desc}</div>
+          <div class="wife-box">${spot.wife}</div>
+          <div class="husband-box">${spot.husband}</div>
+        `;
+
+        listEl.appendChild(card);
+      });
+    }
+
+    // 초기 렌더링
+    render();
+  </script>
+</body>
+</html>
