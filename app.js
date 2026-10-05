@@ -1,8 +1,8 @@
 /* ==========================================================================
-   OsakaGo - 오사카 여행 번역기 & 음성 길찾기 & 맛집 가이드 메인 스크립트
+   OsakaGo v10.2 - 오사카·교토 여행 번역기 & 길찾기 & 부부 맞춤 코스 스크립트
    ========================================================================== */
 
-const CURRENT_VERSION = '10.1';
+const CURRENT_VERSION = '10.2';
 
 // 전역 상태
 const state = {
@@ -17,8 +17,10 @@ const state = {
   history: JSON.parse(localStorage.getItem('osaka_trans_history') || '[]'),
   currentPhraseCategory: 'all',
   currentFoodCategory: 'all',
+  selectedCourseOption: parseInt(localStorage.getItem('osaka_selected_course') || '1', 10),
   selectedDay: 1,
-  plans: JSON.parse(localStorage.getItem('osaka_plans_v1') || 'null'),
+  customPlans: null,
+  plans: null,
   map: null,
   mapMarkers: [],
   userMarker: null,
@@ -336,63 +338,863 @@ const placesDatabase = [
 ];
 
 // ==========================================
-// 2. 4박 5일 오사카 추천 일정 기본 템플릿
+// 2. 부부 맞춤 3대 코스 (교토 3일 + 오사카 1일, 호텔 2곳 연동) 데이터
 // ==========================================
-const defaultPlans = {
+const customItineraries = {
   1: {
-    title: 'Day 1: 오사카 입국 & 난바/도톤보리 첫날',
-    desc: '간사이 공항에서 난바로 이동 후 활기찬 오사카의 밤거리 즐기기',
-    items: [
-      { id: '1-1', text: '간사이 국제공항 도착 & 라피트(난카이 전철) 탑승', note: '공항에서 난바역까지 약 38분 소요', done: false },
-      { id: '1-2', text: '난바역 주변 호텔 체크인 및 짐 풀기', note: '도톤보리 도보 5~10분 거리가 편리', done: false },
-      { id: '1-3', text: '도톤보리 글리코상 앞에서 만세 인증샷 찍기', note: '에비스 다리 위가 명당', done: false },
-      { id: '1-4', text: '앗치치혼포 타코야키 & 이치란 라멘 저녁 식사', note: '웨이팅이 있을 수 있으니 야식으로도 추천', done: false },
-      { id: '1-5', text: '돈키호테 도톤보리점 첫 탐방 또는 우라난바 이자카야', note: '시원한 나마비루(생맥주)로 1일차 마무리', done: false }
-    ]
+    name: '🧶 감성 예술 & 공방·뜨개질 힐링형',
+    shortName: '감성 예술 & 공방·뜨개질',
+    themeBadge: '🌟 강력 추천 · 아내 취향 1위',
+    days: {
+      1: {
+        title: 'Day 1: 교토 산조도리 예술 공방 & 수예·패브릭 탐방',
+        desc: '주조 숙소에 짐을 맡긴 후 산조도리 아브릴(AVRIL) 감성 털실, 미나 페르호넨 자수 소품, 레트로 깃사텐 티타임',
+        hotel: 'Kyoto U-Bell hotel',
+        hotelArea: '교토 주조/교토역 남쪽',
+        hotelNote: '지하철 가라스마선 주조역 도보 3분 · 깔끔한 대욕장 완비',
+        items: [
+          {
+            id: 'c1-d1-1',
+            time: '11:30',
+            text: '간사이공항 도착 ➔ Kyoto U-Bell hotel (주조역) 짐 보관',
+            tag: 'hotel',
+            tagLabel: '🏨 연계 숙소',
+            desc: '간사이공항에서 하루카 특급으로 교토역(75분) 이동 후 가라스마선 환승. 주조역 도보 3분 Kyoto U-Bell hotel에 캐리어 무료 보관.',
+            wifePoint: '역세권이라 번거롭지 않게 짐을 맡기고 가벼운 마음으로 산조로 출발할 수 있어요!',
+            coupleTip: '체크인 시간 전이라도 프런트에서 짐 보관증 받고 가벼운 에코백만 챙겨 나오기.',
+            done: false
+          },
+          {
+            id: 'c1-d1-2',
+            time: '13:00',
+            text: '교토 산조도리 아브릴(AVRIL 三条店) 감성 털실 탐방',
+            tag: 'yarn',
+            tagLabel: '🧶 뜨개/패브릭',
+            desc: '일본 최고의 감성 털실 전문점! 독창적인 색감의 폼폼 얀, 테이프사, 핑거 니팅 키트와 원데이 패키지가 가득한 뜨개인들의 성지.',
+            wifePoint: '한국에서는 볼 수 없는 독보적인 색감과 질감의 콘사들이 가득해서 눈이 반짝반짝!',
+            coupleTip: '아내가 고르는 동안 예쁜 색감의 미니 키트나 선물용 실을 남편이 챙겨주면 센스 만점.',
+            done: false
+          },
+          {
+            id: 'c1-d1-3',
+            time: '14:30',
+            text: '미나 페르호넨 피스(minä perhonen piece, 京都)',
+            tag: 'yarn',
+            tagLabel: '🧶 예술·텍스타일',
+            desc: '산조 사쿠라 빌딩 3층. 디자이너 미나카와 아키라의 예술적 자수 패브릭 조각(piece), 핸드메이드 브로치, 가방이 전시된 갤러리형 숍.',
+            wifePoint: '작은 조각 천 하나하나에 담긴 감성 자수 패턴과 패브릭 브로치가 너무 사랑스러워요.',
+            coupleTip: '1920년대 지어진 고풍스러운 목조 계단을 올라가는 길부터 멋진 감성 포토존입니다.',
+            done: false
+          },
+          {
+            id: 'c1-d1-4',
+            time: '16:00',
+            text: '이노다 커피 본점(イノダコーヒ 本店) 레트로 티타임',
+            tag: 'cafe',
+            tagLabel: '☕ 레트로 깃사텐',
+            desc: '1940년 창업한 교토의 상징적 킷사텐. 클래식 은쟁반에 나오는 아라비아의 진주 블렌드 커피와 부드러운 레몬 파이.',
+            wifePoint: '붉은 벽돌과 클래식 샹들리에, 창밖 초록빛 일본 정원이 주는 편안한 여유.',
+            coupleTip: '본관 안쪽 테라스 정원석이 가장 인기 있는 명당자리니 꼭 테라스석으로 요청해보세요.',
+            done: false
+          },
+          {
+            id: 'c1-d1-5',
+            time: '18:00',
+            text: '카모가와(鴨川) 삼조대교 강변 산책 & 폰토초 골목 만찬',
+            tag: 'culture',
+            tagLabel: '⛩️ 골목·미식',
+            desc: '삼조대교에서 노을 지는 카모가와 강변 둔치를 거닐고, 좁은 목조 골목 폰토초에서 교토 가정식 오반자이와 시원한 나마비루 한잔.',
+            wifePoint: '강둑에 나란히 앉아 강바람 쐬며 둘만의 인생 사진 남기기.',
+            coupleTip: '폰토초 골목길은 등불이 켜질 때 가장 아름다우니 저녁 6시 무렵 천천히 걸어보세요.',
+            done: false
+          },
+          {
+            id: 'c1-d1-6',
+            time: '20:30',
+            text: 'Kyoto U-Bell hotel 복귀 & 대욕장 온천 힐링',
+            tag: 'hotel',
+            tagLabel: '🏨 힐링숙박',
+            desc: '주조역 숙소로 복귀하여 호텔 내 청결한 대욕장에서 따뜻한 탕에 몸을 담그고 첫날의 피로 말끔히 풀기.',
+            wifePoint: '하루 종일 걸어 뻐근했던 다리를 온천물에서 편안하게 풀 수 있어 최고예요.',
+            coupleTip: '호텔 로비 편의점 자판기에서 시원한 우유나 아이스크림 사서 목욕 후 마시기!',
+            done: false
+          }
+        ]
+      },
+      2: {
+        title: 'Day 2: 이치조지 서점&공방 · 케이분샤 & 사쿄구 예술 골목',
+        desc: '세계에서 가장 아름다운 서점 케이분샤 이치조지점, 골목 북카페 런치, 긴카쿠지(은각사) 고즈넉한 이끼 정원 산책',
+        hotel: 'Kyoto U-Bell hotel',
+        hotelArea: '교토 주조/교토역 남쪽',
+        hotelNote: '가라스마선 주조역에서 전철로 이동 편리',
+        items: [
+          {
+            id: 'c1-d2-1',
+            time: '09:40',
+            text: '에이잔 전철 타고 이치조지(一乗寺) 예술 골목 도착',
+            tag: 'transport',
+            tagLabel: '🚆 감성 전철',
+            desc: '데마치야나기역에서 클래식한 1량짜리 에이잔(叡山) 전철 탑승. 한적한 교토 북부 주택가 풍경을 감상하며 이치조지역 도착.',
+            wifePoint: '만화에 나올 것 같은 귀여운 초록색 전철과 한적한 골목길 정취!',
+            coupleTip: '앞자리 창가에 앉으면 철길과 교토 주택가의 감성적인 풍경이 한눈에 들어옵니다.',
+            done: false
+          },
+          {
+            id: 'c1-d2-2',
+            time: '10:15',
+            text: '케이분샤 이치조지점(恵文社 一乗寺店) 감성 탐방',
+            tag: 'book',
+            tagLabel: '📚 세계적 서점',
+            desc: '영국 가디언지 선정 "세계에서 가장 아름다운 10대 서점". 도서뿐만 아니라 자체 패브릭 에코백, 독립 출판물, 감성 문구와 리빙 소품 큐레이션.',
+            wifePoint: '책과 따뜻한 조명, 핸드메이드 굿즈가 어우러져 시간 가는 줄 모르는 마법 같은 서점.',
+            coupleTip: '서점 안쪽 갤러리 "앙페르(enfer)" 코너의 로컬 공예가 특별전도 놓치지 마세요.',
+            done: false
+          },
+          {
+            id: 'c1-d2-3',
+            time: '12:30',
+            text: '카페 츠바메(つばめ) 정갈한 오가닉 가정식 런치',
+            tag: 'cafe',
+            tagLabel: '☕ 감성 카페',
+            desc: '케이분샤 근처 골목길에 숨은 아늑한 북카페. 소박한 원목 테이블에서 맛보는 오늘의 정식과 수제 디저트.',
+            wifePoint: '자극적이지 않고 정갈한 일본 집밥의 따뜻한 감동!',
+            coupleTip: '이치조지 라멘 거리도 유명하지만, 조용한 북카페 분위기를 원한다면 츠바메를 적극 추천해요.',
+            done: false
+          },
+          {
+            id: 'c1-d2-4',
+            time: '14:30',
+            text: '시라카와 수로길 & 은각사(긴카쿠지) 모래 정원 산책',
+            tag: 'culture',
+            tagLabel: '⛩️ 고즈넉 힐링',
+            desc: '맑은 수로를 따라 걸어 은각사로 이동. 은모래를 쌓아 만든 향월대(向月台)와 고요한 이끼 숲길을 걸으며 사색하기.',
+            wifePoint: '금각사의 화려함보다 훨씬 깊이 있고 차분한 교토의 진짜 선(Zen) 감성.',
+            coupleTip: '은각사 내려오는 길의 말차 아이스크림과 갓 구운 당고를 둘이 사이좋게 나눠 먹기.',
+            done: false
+          },
+          {
+            id: 'c1-d2-5',
+            time: '17:00',
+            text: '사쿄구 키타시라카와 로컬 공방 & 도자기 숍 투어',
+            tag: 'yarn',
+            tagLabel: '🧶 공방 소품',
+            desc: '현지 작가들의 수제 머그잔, 패브릭 린넨 키친웨어, 빈티지 엽서를 판매하는 개성 넘치는 아틀리에 둘러보기.',
+            wifePoint: '공장에서 찍어낸 물건이 아닌 작가의 온기가 담긴 우리 집 식탁용 도자기 찻잔 득템!',
+            coupleTip: '깨지기 쉬운 도자기는 에어캡 포장을 꼼꼼히 부탁하면 안전하게 가져갈 수 있어요.',
+            done: false
+          },
+          {
+            id: 'c1-d2-6',
+            time: '19:30',
+            text: '교토역 야경 조망 & 로컬 야키토리 만찬 후 호텔 복귀',
+            tag: 'cafe',
+            tagLabel: '🍶 로컬 만찬',
+            desc: '교토역으로 돌아와 공중정원에서 교토타워 야경을 감상하고, 숯불 야키토리와 하이볼 만찬 후 주조역 숙소로 복귀.',
+            wifePoint: '시원한 바람을 맞으며 반짝이는 교토타워 앞에서 남편과 다정한 사진 남기기.',
+            coupleTip: '주조 U-Bell hotel은 교토역에서 단 2정거장(3분)이라 밤늦게 돌아가도 부담이 전혀 없습니다.',
+            done: false
+          }
+        ]
+      },
+      3: {
+        title: 'Day 3: 교토 힐링&공방 · 전통 비즈·바늘 명가 & 카모가와 산책',
+        desc: '400년 전통 수예 바늘 미스야 바늘, 유럽 빈티지 단추 전문점 이드(idola), 기온 시라카와 전통 찻집 탐방',
+        hotel: 'Kyoto U-Bell hotel',
+        hotelArea: '교토 주조/교토역 남쪽',
+        hotelNote: '교토에서의 마지막 밤 · 대욕장 피로회복',
+        items: [
+          {
+            id: 'c1-d3-1',
+            time: '09:30',
+            text: '롯카쿠도(六角堂) 사찰 아침 산책 & 모닝커피',
+            tag: 'culture',
+            tagLabel: '⛩️ 아침 산책',
+            desc: '꽃꽂이 발상지이자 교토의 배꼽으로 불리는 아담한 사찰. 연못의 백조와 비둘기를 구경하고 통유리 스타벅스에서 커피 한잔.',
+            wifePoint: '도심 한가운데 숨겨진 비밀 정원 같은 평화로움과 귀여운 비둘기 오미쿠지.',
+            coupleTip: '스타벅스 롯카쿠도점 2층 창가 자리는 사찰 본당이 정면으로 보이는 비밀 뷰포인트!',
+            done: false
+          },
+          {
+            id: 'c1-d3-2',
+            time: '11:00',
+            text: '미스야 바늘(みすや針) 400년 전통 수예 바늘 공방',
+            tag: 'yarn',
+            tagLabel: '🧶 전통 수예',
+            desc: '에도 시대부터 이어진 교토 황실 진상 바늘 명가! 작은 골목 안뜰을 통과해야 나타나는 교토 장인들의 숨겨진 보물창고.',
+            wifePoint: '원단에 부드럽게 들어가는 수제 바늘과 아기자기한 과일·동물 모양 바늘꽂이(침봉)!',
+            coupleTip: '바느질이나 뜨개질을 좋아하는 아내를 위한 가장 품격 있는 여행 기념품이 됩니다.',
+            done: false
+          },
+          {
+            id: 'c1-d3-3',
+            time: '12:30',
+            text: '이드(idola) - 빈티지 단추 & 유럽 비즈 셀렉트숍',
+            tag: 'yarn',
+            tagLabel: '🧶 빈티지 부자재',
+            desc: '산조 사쿠라 빌딩 3층. 프랑스와 유럽 각지에서 수집한 1900년대 엔틱 글라스 비즈, 빈티지 단추, 수예 리본이 가득한 공간.',
+            wifePoint: '서랍을 열 때마다 쏟아져 나오는 오색찬란한 빈티지 단추에 심장이 쿵쿵!',
+            coupleTip: '마음에 드는 단추를 고르면 현장에서 즉석 귀걸이나 브로치로 가공해주는 서비스도 있어요.',
+            done: false
+          },
+          {
+            id: 'c1-d3-4',
+            time: '15:00',
+            text: '기온 시라카와 타츠미 다리 & 전통 찻집 기온 코모리',
+            tag: 'cafe',
+            tagLabel: '☕ 전통 디저트',
+            desc: '버드나무 가지가 시냇물 위로 드리워진 기온 시라카와 보존지구. 100년 된 목조 가옥에서 즐기는 생와라비모찌와 말차 파르페.',
+            wifePoint: '영화 속 한 장면 같은 타츠미 다리 앞에서 예쁜 부부 사진 찍기.',
+            coupleTip: '창가 다다미방에 앉아 시냇물 흐르는 소리를 들으며 즐기는 와라비모찌의 쫄깃한 식감!',
+            done: false
+          },
+          {
+            id: 'c1-d3-5',
+            time: '18:30',
+            text: '가와라마치 골목 교토풍 스키야키 or 오반자이 디너',
+            tag: 'cafe',
+            tagLabel: '🍲 교토 만찬',
+            desc: '교토에서의 마지막 밤을 축하하는 정통 스키야키 만찬. 달콤짭조름한 간장 소스에 부드러운 소고기와 교토 특산 채소의 조화.',
+            wifePoint: '고풍스러운 개별실에서 둘만의 오붓한 이야기와 함께 즐기는 럭셔리 디너.',
+            coupleTip: '달걀노른자를 살짝 풀어 찍어 먹는 일본식 스키야키의 깊은 풍미를 음미해보세요.',
+            done: false
+          },
+          {
+            id: 'c1-d3-6',
+            time: '21:00',
+            text: 'Kyoto U-Bell hotel 복귀 & 교토 전리품 패킹',
+            tag: 'hotel',
+            tagLabel: '🏨 교토 마지막 밤',
+            desc: '호텔로 복귀하여 교토에서 득템한 실, 단추, 에코백, 찻잔을 캐리어에 정리하고 대욕장에서 편안한 휴식.',
+            wifePoint: '침대 위에 3일간 모은 감성 아이템들을 모아두고 흐뭇하게 인증샷 찍기!',
+            coupleTip: '내일 아침 오사카 혼마치 호텔로 이동할 동선(체크아웃->지하철->한큐전철)을 가볍게 점검.',
+            done: false
+          }
+        ]
+      },
+      4: {
+        title: 'Day 4: 오사카 나카자키초&빈티지 · 레트로 골목 공방 & 미나미센바',
+        desc: '교토 체크아웃 후 오사카 혼마치 The basement hotel 체크인, 나카자키초 옛 골목 공방, 기타하마 리버뷰 카페, 미나미센바 부티크',
+        hotel: 'The basement hotel osaka honmachi',
+        hotelArea: '오사카 혼마치/미나미센바 앞',
+        hotelNote: '혼마치역 15번 출구 도보 3분 · 감각적인 지하 라운지 & 쇼핑 최적지',
+        items: [
+          {
+            id: 'c1-d4-1',
+            time: '10:00',
+            text: '교토 체크아웃 ➔ The basement hotel osaka honmachi 체크인',
+            tag: 'hotel',
+            tagLabel: '🏨 오사카 숙소',
+            desc: '교토 U-Bell hotel 체크아웃 후 전철로 오사카 혼마치역 15번 출구 도착. 모던한 감성의 The basement hotel에 짐 보관.',
+            wifePoint: '미나미센바와 신사이바시 바로 앞이라 쇼핑 동선이 정말 환상적이에요!',
+            coupleTip: '지하 라운지 인테리어가 굉장히 힙하니 짐 맡길 때 라운지 구경도 가볍게 해보세요.',
+            done: false
+          },
+          {
+            id: 'c1-d4-2',
+            time: '11:30',
+            text: '나카자키초(中崎町) 100년 나가야 골목 공방 산책',
+            tag: 'yarn',
+            tagLabel: '🧶 골목 공방',
+            desc: '오사카 지하철로 10분 이동. 전쟁을 겪지 않고 보존된 레트로 목조 가옥 골목에 자리 잡은 뜨개질·자수 공방과 핸드메이드 소품 숍 탐방.',
+            wifePoint: '골목 모퉁이마다 숨겨진 아기자기한 식물들과 작은 수예 공방의 따스함!',
+            coupleTip: '화려한 오사카 번화가와는 전혀 다른 교토 못지않은 고즈넉함과 감성이 살아있는 명소입니다.',
+            done: false
+          },
+          {
+            id: 'c1-d4-3',
+            time: '13:30',
+            text: '기타하마(北浜) 모토 커피(MOTO COFFEE) 테라스 런치',
+            tag: 'cafe',
+            tagLabel: '☕ 리버뷰 테라스',
+            desc: '토사보리가와 강변 테라스석에 앉아 나카노시마 공원 중앙공회당의 유럽풍 건축물을 바라보며 핸드드립 커피와 티라미수 즐기기.',
+            wifePoint: '강물에 비치는 햇살과 시원한 강바람을 맞으며 마시는 커피 한잔의 낭만.',
+            coupleTip: '야외 테라스석은 사진이 정말 예쁘게 나오니 둘만의 커플 사진을 꼭 찍어보세요.',
+            done: false
+          },
+          {
+            id: 'c1-d4-4',
+            time: '15:30',
+            text: '미나미센바(南船場) 디자이너 셀렉트숍 & 빈티지 부티크',
+            tag: 'vintage',
+            tagLabel: '👗 트렌디 쇼핑',
+            desc: '숙소(The basement hotel) 도보 2분 거리! 감각적인 로컬 디자이너 의류, 가죽 공방, 빈티지 액세서리 부티크 집중 탐방.',
+            wifePoint: '신사이바시의 복잡한 인파에서 벗어나 여유롭고 세련되게 쇼핑할 수 있어 아내 대만족!',
+            coupleTip: '짐이 무거워지면 바로 앞 호텔 방에 쇼핑백을 두고 가볍게 다시 나올 수 있습니다.',
+            done: false
+          },
+          {
+            id: 'c1-d4-5',
+            time: '18:30',
+            text: '미나미센바 와규 야키니쿠 피날레 만찬',
+            tag: 'cafe',
+            tagLabel: '🥩 오사카 미식',
+            desc: '부부 여행의 마지막 밤을 기념하는 최상급 와규 숯불 야키니쿠와 시원한 나마비루 건배!',
+            wifePoint: '입안에서 사르르 녹는 부드러운 와규와 여행의 감동을 나누는 시간.',
+            coupleTip: '이번 여행에서 가장 기억에 남는 순간을 서로 하나씩 이야기하며 건배하기.',
+            done: false
+          },
+          {
+            id: 'c1-d4-6',
+            time: '21:00',
+            text: 'The basement hotel osaka honmachi 감성 라운지 나이트',
+            tag: 'hotel',
+            tagLabel: '🏨 여행 마무리',
+            desc: '호텔 지하의 감각적인 라운지 바에서 웰컴 드링크나 칵테일 한잔으로 로맨틱한 마지막 밤을 완성.',
+            wifePoint: '멋진 조명과 음악이 흐르는 부티크 라운지에서 부부만의 달콤한 마무리.',
+            coupleTip: '내일 출국길은 혼마치역에서 난카이선/난바 방면으로 40분 만에 공항 직통 이동 가능!',
+            done: false
+          }
+        ]
+      }
+    }
   },
   2: {
-    title: 'Day 2: 유니버설 스튜디오 재팬 (USJ) 완전정복',
-    desc: '하루 종일 테마파크에서 짜릿한 어트랙션과 슈퍼 닌텐도 월드 즐기기',
-    items: [
-      { id: '2-1', text: '오픈런 준비! 난바역에서 JR 유니버설시티역 이동', note: '개장 1시간~1시간 반 전 도착 추천', done: false },
-      { id: '2-2', text: '슈퍼 닌텐도 월드 (마리오 카트, 파워업 밴드)', note: '정리권(에어리어 입장권) 앱으로 즉시 확보', done: false },
-      { id: '2-3', text: '해리포터 앤드 더 포비든 저니 & 버터맥주 맛보기', note: '호그와트 성 디테일 감상', done: false },
-      { id: '2-4', text: '미니언즈 메이헴 또는 플라잉 다이노소어 타기', note: '싱글라이더 줄 활용 팁', done: false },
-      { id: '2-5', text: '유니버설 시티워크에서 저녁 식사 후 난바로 복귀', note: '발 마사지나 온천으로 피로 풀기', done: false }
-    ]
+    name: '👗 트렌디 패션 & 빈티지 쇼핑 집중형',
+    shortName: '트렌디 패션 & 빈티지 쇼핑',
+    themeBadge: '✨ 트렌디 쇼핑 & 셀렉트',
+    days: {
+      1: {
+        title: 'Day 1: 교토 산조도리 & 가와라마치 레트로 패션 거리',
+        desc: '주조 Kyoto U-Bell hotel 체크인 후 산조도리 아케이드, 아메리칸 빈티지 숍, 가와라마치 감성 브랜드 탐방',
+        hotel: 'Kyoto U-Bell hotel',
+        hotelArea: '교토 주조/교토역 남쪽',
+        hotelNote: '지하철 가라스마선 주조역 도보 3분',
+        items: [
+          {
+            id: 'c2-d1-1',
+            time: '11:30',
+            text: '간사이공항 도착 ➔ Kyoto U-Bell hotel 체크인 & 짐 보관',
+            tag: 'hotel',
+            tagLabel: '🏨 연계 숙소',
+            desc: '하루카 특급으로 교토역 이동 후 주조역 호텔에 짐을 맡기고 편안한 쇼핑 복장으로 환복.',
+            wifePoint: '호텔에 무거운 짐을 바로 맡기고 가벼운 마음으로 가와라마치 쇼핑 출발!',
+            coupleTip: '교토 시내 버스보다 가라스마선 지하철을 이용하면 차 막힘 없이 산조역까지 10분 만에 도착.',
+            done: false
+          },
+          {
+            id: 'c2-d1-2',
+            time: '13:00',
+            text: '산조도리 빈티지 아카이브 & JAM 교토점 탐방',
+            tag: 'vintage',
+            tagLabel: '👗 빈티지 셀렉트',
+            desc: '엄선된 아메리칸 헤리티지 웨어, 레트로 자켓, 유니크한 그래픽 티셔츠가 가득한 교토 최대 빈티지 편집숍.',
+            wifePoint: '상태가 아주 깨끗하고 희소성 있는 감성 빈티지 아우터와 악세서리 득템 기회!',
+            coupleTip: '남편과 아내가 서로에게 어울리는 레트로 룩을 하나씩 골라 입혀주기.',
+            done: false
+          },
+          {
+            id: 'c2-d1-3',
+            time: '15:00',
+            text: '교토 BAL 복합문화공간 & 무지 카페',
+            tag: 'vintage',
+            tagLabel: '👗 라이프스타일',
+            desc: '일본에서 가장 고급스러운 복합 쇼핑몰. 투데이즈 스페셜, 톰 브라운, 마가렛 호웰, 그리고 마루젠 대형 서점 입점.',
+            wifePoint: '백화점 이상의 감각적인 인테리어와 감성 라이프스타일 소품 가득!',
+            coupleTip: '지하 대형 서점 마루젠의 문구 코너와 카페에서 달콤한 레몬 케이크 맛보기.',
+            done: false
+          },
+          {
+            id: 'c2-d1-4',
+            time: '17:30',
+            text: '신쿄고쿠 & 테라마치 아케이드 세컨핸드 숍 투어',
+            tag: 'vintage',
+            tagLabel: '👗 스트릿 쇼핑',
+            desc: '비가 와도 편안한 지붕 있는 아케이드 거리. 일본 로컬 세컨핸드 숍과 독특한 수제 가죽 공방 밀집.',
+            wifePoint: '숨겨진 보물 같은 주얼리와 빈티지 스카프를 찾는 쏠쏠한 재미.',
+            coupleTip: '중간중간 타코야키나 크레페를 간식으로 먹으며 활기찬 분위기 즐기기.',
+            done: false
+          },
+          {
+            id: 'c2-d1-5',
+            time: '19:30',
+            text: '기온 폰토초 야경 & 교토 흑우 와규 디너',
+            tag: 'cafe',
+            tagLabel: '🥩 감성 디너',
+            desc: '전통 등불이 켜진 폰토초 골목에서 즐기는 프리미엄 교토 와규 스테이크와 와인 한잔.',
+            wifePoint: '쇼핑 후 낭만적인 등불 골목에서 누리는 럭셔리한 만찬.',
+            coupleTip: '창밖으로 카모가와 강물이 내려다보이는 테이블 추천.',
+            done: false
+          },
+          {
+            id: 'c2-d1-6',
+            time: '21:30',
+            text: 'Kyoto U-Bell hotel 복귀 & 대욕장 힐링',
+            tag: 'hotel',
+            tagLabel: '🏨 온천 힐링',
+            desc: '주조 숙소로 돌아와 피로를 푸는 대욕탕에서 온천욕 즐기기.',
+            wifePoint: '하루 만보 넘게 걸은 발의 피로를 사르르 녹여줘요.',
+            coupleTip: '쇼핑한 옷들을 옷걸이에 걸어두고 내일 입을 코디 맞춰보기.',
+            done: false
+          }
+        ]
+      },
+      2: {
+        title: 'Day 2: 이치조지 독립 서점 & 사쿄구 로컬 디자이너 마켓',
+        desc: '케이분샤 이치조지점 굿즈 쇼핑, 사쿄구 독립 패션 브랜드 부티크, 키타시라카와 카페 산책',
+        hotel: 'Kyoto U-Bell hotel',
+        hotelArea: '교토 주조/교토역 남쪽',
+        hotelNote: '교토 로컬 예술 탐방 거점',
+        items: [
+          {
+            id: 'c2-d2-1',
+            time: '10:30',
+            text: '케이분샤 이치조지점 감성 굿즈 & 디자인 서적 쇼핑',
+            tag: 'book',
+            tagLabel: '📚 세계적 서점',
+            desc: '세계에서 가장 아름다운 서점에서 자체 제작 린넨 에코백, 빈티지 포스터, 일본 디자인 매거진 구매.',
+            wifePoint: '케이분샤 오리지널 패브릭 에코백은 들고 다니는 것만으로도 감성 뿜뿜!',
+            coupleTip: '서점 내 북 큐레이터가 추천하는 교토 로컬 디자인 서적 둘러보기.',
+            done: false
+          },
+          {
+            id: 'c2-d2-2',
+            time: '12:30',
+            text: '이치조지 골목 감성 카페 런치 & 드립 커피',
+            tag: 'cafe',
+            tagLabel: '☕ 골목 런치',
+            desc: '한적한 주택가 골목길의 로스터리 카페에서 수제 카레와 신선한 핸드드립 커피 런치.',
+            wifePoint: '조용하고 아늑한 공간에서 남편과 나누는 여유로운 티타임.',
+            coupleTip: '원두를 직접 볶는 곳이라 집에서 내려 마실 기념 원두를 사기 좋습니다.',
+            done: false
+          },
+          {
+            id: 'c2-d2-3',
+            time: '14:30',
+            text: '키타시라카와 로컬 디자이너 부티크 & 공방',
+            tag: 'vintage',
+            tagLabel: '👗 디자이너 숍',
+            desc: '교토 예술대학 인근의 개성 넘치는 신진 디자이너 핸드메이드 의류와 주얼리 숍 탐방.',
+            wifePoint: '흔한 기성복 브랜드가 아닌 오직 여기서만 만날 수 있는 독창적인 실루엣의 옷들!',
+            coupleTip: '매장 주인과 짧은 일본어로 소통하며 옷에 담긴 스토리를 듣는 재미.',
+            done: false
+          },
+          {
+            id: 'c2-d2-4',
+            time: '17:00',
+            text: '가라스마오이케 신푸칸(新風館) 트렌드 스페이스',
+            tag: 'vintage',
+            tagLabel: '👗 트렌디 스팟',
+            desc: '옛 교토 중앙전화국을 개조한 에이스 호텔과 입점 패션 브랜드(메종 키츠네, 빔즈 등)가 어우러진 핫플.',
+            wifePoint: '정원이 감싸고 있는 감각적인 건축물과 트렌디한 편집숍의 조화.',
+            coupleTip: '중앙 정원 벤치는 사진이 예술로 나오는 부부 포토존입니다.',
+            done: false
+          },
+          {
+            id: 'c2-d2-5',
+            time: '19:30',
+            text: '교토역 주변 로컬 이자카야 & 닭꼬치 생맥주',
+            tag: 'cafe',
+            tagLabel: '🍶 로컬 주점',
+            desc: '현지 직장인들이 찾는 활기찬 이자카야에서 시원한 나마비루와 바삭한 튀김 안주 만찬.',
+            wifePoint: '여행지 현지 특유의 활기와 정겨운 분위기 만끽.',
+            coupleTip: '호텔 U-Bell까지 지하철 2정거장으로 3분이면 편안하게 귀가.',
+            done: false
+          }
+        ]
+      },
+      3: {
+        title: 'Day 3: 교토 시조·가와라마치 백화점 & 빈티지 명품 스트릿',
+        desc: '후지이다이마루, 2nd Street 교토 가와라마치, 니시키 시장 감성 소품, 카모가와 강변 비스트로',
+        hotel: 'Kyoto U-Bell hotel',
+        hotelArea: '교토 주조/교토역 남쪽',
+        hotelNote: '교토 3일차 연박 마무리',
+        items: [
+          {
+            id: 'c2-d3-1',
+            time: '10:30',
+            text: '후지이다이마루 백화점 감성 패션 투어',
+            tag: 'vintage',
+            tagLabel: '👗 트렌드 백화점',
+            desc: '스나이델, 프레이 아이디, 비숍(Bshop) 등 20~30대 여성에게 가장 인기 높은 일본 대표 컨템포러리 브랜드 총집합.',
+            wifePoint: '일본 현지 최신 트렌드의 고감도 의류를 한자리에서 피팅해볼 수 있어요!',
+            coupleTip: '외국인 여권 제시 시 5% 할인 쿠폰과 텍스프리 면세 혜택 꼭 챙기기.',
+            done: false
+          },
+          {
+            id: 'c2-d3-2',
+            time: '13:00',
+            text: '니시키 시장 골목길 수제 젓가락 & 소품 숍 탐방',
+            tag: 'culture',
+            tagLabel: '⛩️ 로컬 공예',
+            desc: '이름을 무료로 각인해주는 부부 수제 나무 젓가락 공방과 일본 전통 패브릭 파우치 쇼핑.',
+            wifePoint: '우리 부부 이름이 새겨진 세상에 하나뿐인 교토 기념 젓가락 세트!',
+            coupleTip: '시장 골목의 타코타마고(문어 메추리알 꼬치)나 두유 도넛 간식 맛보기.',
+            done: false
+          },
+          {
+            id: 'c2-d3-3',
+            time: '15:00',
+            text: '2nd Street & 카인드올(Kindal) 가와라마치 빈티지 명품',
+            tag: 'vintage',
+            tagLabel: '👗 명품 빈티지',
+            desc: '일본 최고의 세컨핸드 스토어. 꼼데가르송, 이세이미야케, 셀린느 등 하이엔드 빈티지 아카이브 탐방.',
+            wifePoint: '상태 극상의 명품 디자이너 가방과 스카프를 합리적인 가격에 발굴하는 기쁨!',
+            coupleTip: '모든 상품에 감정서가 부착되어 있어 안심하고 둘러볼 수 있습니다.',
+            done: false
+          },
+          {
+            id: 'c2-d3-4',
+            time: '18:30',
+            text: '카모가와 강변 이탈리안 비스트로 만찬',
+            tag: 'cafe',
+            tagLabel: '🍷 감성 디너',
+            desc: '강변 통유리창 너머로 야경을 보며 즐기는 트러플 파스타와 화이트 와인.',
+            wifePoint: '로맨틱한 분위기에서 아내를 위한 특별한 기념 디너.',
+            coupleTip: '와인 한잔 곁들이며 오늘 쇼핑한 아이템들의 만족도를 서로 공유해보기.',
+            done: false
+          },
+          {
+            id: 'c2-d3-5',
+            time: '21:00',
+            text: 'Kyoto U-Bell hotel 복귀 & 짐 정리',
+            tag: 'hotel',
+            tagLabel: '🏨 호텔 패킹',
+            desc: '호텔로 복귀하여 교토 쇼핑 아이템들을 캐리어에 깔끔히 패킹하고 대욕장 휴식.',
+            wifePoint: '새로 산 옷과 소품들을 정리하며 뿌듯한 밤 보내기.',
+            coupleTip: '내일 오사카 혼마치로 넘어갈 캐리어 무게 미리 확인하기.',
+            done: false
+          }
+        ]
+      },
+      4: {
+        title: 'Day 4: 오사카 나카자키초 빈티지 & 미나미센바 부티크',
+        desc: '혼마치 The basement hotel 체크인, 나카자키초 레트로 빈티지 숍, 아메리카무라 스트릿, 미나미센바 디자이너 거리',
+        hotel: 'The basement hotel osaka honmachi',
+        hotelArea: '오사카 혼마치/미나미센바 앞',
+        hotelNote: '혼마치역 15번 출구 도보 3분 · 쇼핑 명소 최적화',
+        items: [
+          {
+            id: 'c2-d4-1',
+            time: '10:00',
+            text: 'The basement hotel osaka honmachi 체크인 & 짐 보관',
+            tag: 'hotel',
+            tagLabel: '🏨 오사카 숙소',
+            desc: '교토에서 오사카 혼마치로 이동하여 감각적인 The basement hotel에 짐 보관.',
+            wifePoint: '미나미센바 쇼핑거리 바로 앞이라 쇼핑 후 짐 두기 최고!',
+            coupleTip: '호텔 지하 라운지가 매우 힙하니 잠시 숨을 고르고 출발하세요.',
+            done: false
+          },
+          {
+            id: 'c2-d4-2',
+            time: '11:30',
+            text: '나카자키초(中崎町) 유럽 빈티지 의류 숍 투어',
+            tag: 'vintage',
+            tagLabel: '👗 유럽 빈티지',
+            desc: '유럽과 미국에서 직접 바잉한 레트로 원피스, 니트, 실크 블라우스 전문 빈티지 부티크 밀집 골목.',
+            wifePoint: '영화 속 주인공이 입을 법한 로맨틱하고 클래식한 빈티지 드레스 탐방!',
+            coupleTip: '골목 골목 숨겨진 작은 숍들이 많으니 천천히 산책하듯 둘러보세요.',
+            done: false
+          },
+          {
+            id: 'c2-d4-3',
+            time: '14:00',
+            text: '기타하마 강변 카페 테라스 & 모던 런치',
+            tag: 'cafe',
+            tagLabel: '☕ 리버뷰 테라스',
+            desc: '나카노시마 강변 테라스 카페에서 시원한 커피와 브런치 즐기기.',
+            wifePoint: '강물 바람 쐬며 여유롭게 오사카의 감성을 만끽하는 힐링 코스.',
+            coupleTip: '테라스에서 찍는 커플 사진이 정말 세련되게 나옵니다.',
+            done: false
+          },
+          {
+            id: 'c2-d4-4',
+            time: '15:30',
+            text: '미나미센바 & 아메리카무라 스트릿 패션 숍 투어',
+            tag: 'vintage',
+            tagLabel: '👗 트렌디 쇼핑',
+            desc: '오사카의 패션 성지! 미나미센바의 세련된 부티크와 아메리카무라의 개성 넘치는 스트릿 숍 탐방.',
+            wifePoint: '남편과 아내 모두 취향에 맞는 옷을 마음껏 쇼핑할 수 있는 완벽한 거리.',
+            coupleTip: 'The basement hotel이 바로 근처라 무거운 쇼핑백을 언제든 방에 두고 올 수 있어요.',
+            done: false
+          },
+          {
+            id: 'c2-d4-5',
+            time: '18:30',
+            text: '신사이바시 와규 야키니쿠 만찬 & The basement hotel',
+            tag: 'cafe',
+            tagLabel: '🥩 피날레 디너',
+            desc: '여행의 마지막 밤, 입에서 녹는 최상급 와규와 생맥주로 화려하게 피날레 장식.',
+            wifePoint: '성공적인 쇼핑과 여행을 자축하는 맛있는 저녁 식사!',
+            coupleTip: '호텔 지하 라운지에서 칵테일 한잔하며 둘만의 추억 정리하기.',
+            done: false
+          }
+        ]
+      }
+    }
   },
   3: {
-    title: 'Day 3: 천년고도 교토 당일치기 (or 오사카 역사 코스)',
-    desc: '오사카에서 전철로 45분! 붉은 도리이와 고즈넉한 사찰 탐방',
-    items: [
-      { id: '3-1', text: '한큐 전철 또는 게이한 전철 타고 교토로 이동', note: '우메다역에서 한큐 교토선 특급 탑승', done: false },
-      { id: '3-2', text: '후시미 이나리 신사 (붉은 센본 도리이 길 산책)', note: '오전에 가면 비교적 덜 붐빔', done: false },
-      { id: '3-3', text: '청수사(기요미즈데라) & 산넨자카/니넨자카 걷기', note: '일본 전통 가옥 거리와 말차 아이스크림', done: false },
-      { id: '3-4', text: '기온 거리 & 카모가와 강변 산책', note: '운이 좋으면 게이샤를 만날 수도 있음', done: false },
-      { id: '3-5', text: '우메다로 복귀하여 헵파이브 대관람차 야경 감상', note: '우메다 스카이빌딩 공중정원도 훌륭함', done: false }
-    ]
-  },
-  4: {
-    title: 'Day 4: 오사카 랜드마크 & 레트로 신세카이 & 쇼핑',
-    desc: '오사카의 과거와 현재! 오사카성과 츠텐카쿠, 그리고 본격 쇼핑 데이',
-    items: [
-      { id: '4-1', text: '오사카성 천수각 둘러보기 & 고자부네 뱃놀이', note: '공원 산책로와 포토존 즐기기', done: false },
-      { id: '4-2', text: '레트로 감성 신세카이 & 츠텐카쿠 타워', note: '쿠시카츠(꼬치튀김) 골목에서 점심 식사 (소스 두 번 찍기 금지!)', done: false },
-      { id: '4-3', text: '신사이바시스지 상점가 & 아메리카무라 쇼핑', note: '의류, 화장품, 캐릭터 굿즈 쇼핑', done: false },
-      { id: '4-4', text: '빅카메라 또는 다이마루 백화점 면세 쇼핑', note: '여권 필수 지참 (Tax Free 받기)', done: false },
-      { id: '4-5', text: '오사카의 명물 야키니쿠 또는 오코노미야키 만찬', note: '마지막 밤을 기념하는 풍성한 저녁 식사', done: false }
-    ]
-  },
-  5: {
-    title: 'Day 5: 마지막 기념품 쇼핑 & 아쉬운 출국',
-    desc: '린쿠 아울렛 또는 공항 면세점에서 선물 챙기고 안전하게 귀국하기',
-    items: [
-      { id: '5-1', text: '호텔 체크아웃 & 짐 챙기기 (캐리어 무게 체크)', note: '항공사 위탁수하물 무게 규정 확인', done: false },
-      { id: '5-2', text: '쿠로몬 시장에서 간단한 아침/브런치 (해산물, 과일)', note: '난바역 인근 도보 이동', done: false },
-      { id: '5-3', text: '간사이 공항행 라피트 탑승 (린쿠타운 경유 가능)', note: '출국 2시간 30분 전 공항 도착 권장', done: false },
-      { id: '5-4', text: '간사이공항 면세점 쇼핑 (도쿄바나나, 시로이코이비토, 로이스 생초콜릿)', note: '남은 엔화 동전 알뜰하게 쓰기', done: false },
-      { id: '5-5', text: '비행기 탑승 & 대한민국 귀국', note: '즐거운 오사카 여행 완료!', done: false }
-    ]
+    name: '⛩️ 전통 문화 + 취향 스팟 밸런스형',
+    shortName: '전통 문화 & 취향 스팟 밸런스',
+    themeBadge: '⛩️ 클래식 감성 & 힐링',
+    days: {
+      1: {
+        title: 'Day 1: 교토 산조도리 역사 건축물 & 기온 야경 산책',
+        desc: '주조 Kyoto U-Bell hotel 체크인, 근대 문화유산 건축 거리 산조도리, 산조 아브릴 뜨개실, 기온 야경',
+        hotel: 'Kyoto U-Bell hotel',
+        hotelArea: '교토 주조/교토역 남쪽',
+        hotelNote: '주조역 도보 3분 · 깔끔한 대욕장',
+        items: [
+          {
+            id: 'c3-d1-1',
+            time: '11:30',
+            text: '간사이공항 도착 ➔ Kyoto U-Bell hotel 체크인 & 짐 보관',
+            tag: 'hotel',
+            tagLabel: '🏨 연계 숙소',
+            desc: '하루카 특급으로 교토 도착 후 주조역 호텔에 짐을 맡기고 산조도리로 이동.',
+            wifePoint: '지하철역 가까운 숙소라 이동이 편리하고 안심돼요.',
+            coupleTip: '가라스마선 주조역에서 산조/시조 방면으로 직통 이동.',
+            done: false
+          },
+          {
+            id: 'c3-d1-2',
+            time: '13:00',
+            text: '교토 문화박물관 별관 붉은벽돌 건축 감상',
+            tag: 'culture',
+            tagLabel: '⛩️ 근대 건축',
+            desc: '메이지 시대 옛 일본은행 교토지점을 보존한 웅장한 서양식 붉은벽돌 국가중요문화재 탐방.',
+            wifePoint: '레트로한 붉은 벽돌과 클래식한 나무 창틀 앞에서 남기는 분위기 있는 사진!',
+            coupleTip: '박물관 내부 로비 카페도 고풍스러운 인테리어로 유명합니다.',
+            done: false
+          },
+          {
+            id: 'c3-d1-3',
+            time: '14:30',
+            text: '산조도리 아브릴(AVRIL) 뜨개실 & 앤틱 공예 숍',
+            tag: 'yarn',
+            tagLabel: '🧶 감성 공방',
+            desc: '일본 감성 털실의 대표 브랜드 아브릴과 산조 거리의 전통 칠기·도자기 공예점 둘러보기.',
+            wifePoint: '전통 건축 거리 속에서 만나는 사랑스러운 색감의 털실과 공예 소품들.',
+            coupleTip: '부부가 함께 집 인테리어용 미니 수예 소품 골라보기.',
+            done: false
+          },
+          {
+            id: 'c3-d1-4',
+            time: '17:30',
+            text: '기온 하나미코지 & 야사카 신사 라이트업 산책',
+            tag: 'culture',
+            tagLabel: '⛩️ 전통 신사',
+            desc: '전통 목조 가옥 보존 거리 하나미코지를 걷고, 밤이 되면 수백 개의 제등이 켜지는 야사카 신사 참배.',
+            wifePoint: '붉은 제등 불빛 아래 은은하게 빛나는 전통 신사의 낭만적인 야경.',
+            coupleTip: '신사 경내에서 부부의 건강과 행복을 비는 오마모리(부적) 하나 챙기기.',
+            done: false
+          },
+          {
+            id: 'c3-d1-5',
+            time: '19:30',
+            text: '카모가와 강변 전통 오반자이 저녁 식사',
+            tag: 'cafe',
+            tagLabel: '🍲 교토 요리',
+            desc: '신선한 제철 채소와 교토 두부로 정갈하게 차려낸 오반자이 정식과 따뜻한 사케 한잔.',
+            wifePoint: '속이 편안하고 깔끔한 교토 고유의 깊은 맛.',
+            coupleTip: '강변 둔치를 따라 산책하며 첫날의 설렘을 나누기.',
+            done: false
+          },
+          {
+            id: 'c3-d1-6',
+            time: '21:30',
+            text: 'Kyoto U-Bell hotel 복귀 & 대욕장 온천 힐링',
+            tag: 'hotel',
+            tagLabel: '🏨 온천 숙박',
+            desc: '주조 숙소로 돌아와 피로를 풀어주는 대욕장에서 따뜻하게 입욕.',
+            wifePoint: '따뜻한 대욕탕에서 피로가 싹 풀려 꿀잠 예약!',
+            coupleTip: '목욕 후 편의점 푸딩과 음료수로 시원하게 마무리.',
+            done: false
+          }
+        ]
+      },
+      2: {
+        title: 'Day 2: 이치조지 케이분샤 서점 & 철학의 길 / 은각사 힐링',
+        desc: '에이잔 전철, 아름다운 케이분샤 서점, 이치조지 카페 런치, 은각사 모래 정원과 철학의 길 사색 산책',
+        hotel: 'Kyoto U-Bell hotel',
+        hotelArea: '교토 주조/교토역 남쪽',
+        hotelNote: '가라스마선 주조역 거점',
+        items: [
+          {
+            id: 'c3-d2-1',
+            time: '10:00',
+            text: '케이분샤 이치조지점(恵文社) 아름다운 서점 탐방',
+            tag: 'book',
+            tagLabel: '📚 감성 서점',
+            desc: '세계에서 가장 아름다운 10대 서점에서 책, 문구, 라이프스타일 굿즈 감상.',
+            wifePoint: '교토 특유의 정취가 살아있는 따뜻한 조명 아래 책과 굿즈 둘러보기.',
+            coupleTip: '선물용으로 인기 만점인 케이분샤 책갈피와 엽서 세트 추천.',
+            done: false
+          },
+          {
+            id: 'c3-d2-2',
+            time: '12:30',
+            text: '이치조지 골목 정갈한 소바 & 튀김 런치',
+            tag: 'cafe',
+            tagLabel: '🥢 로컬 소바',
+            desc: '메밀 향 가득한 수제 니하치 소바와 바삭한 교토 채소 튀김으로 든든한 점심 식사.',
+            wifePoint: '시원하고 깔끔한 메밀면과 고소한 튀김의 환상 궁합!',
+            coupleTip: '소바 유(메밀 삶은 물)를 쯔유에 부어 따뜻하게 마셔보세요.',
+            done: false
+          },
+          {
+            id: 'c3-d2-3',
+            time: '14:30',
+            text: '긴카쿠지(은각사) 절제된 모래 정원 & 이끼 길',
+            tag: 'culture',
+            tagLabel: '⛩️ 명품 정원',
+            desc: '달빛을 반사하기 위해 만든 은빛 모래 정원과 고요한 연못, 전망대에서 내려다보는 교토 전경.',
+            wifePoint: '금각사보다 훨씬 사색적이고 기품 있는 일본 정원의 극치.',
+            coupleTip: '전망대 언덕길에 오르면 은각사 지붕과 교토 시내가 한눈에 내려다보입니다.',
+            done: false
+          },
+          {
+            id: 'c3-d2-4',
+            time: '16:00',
+            text: '철학의 길(哲学の道) 수로 산책 & 요지야 카페',
+            tag: 'culture',
+            tagLabel: '🌿 힐링 산책',
+            desc: '시라카와 수로를 따라 벚나무와 단풍나무가 이어진 돌담길 산책. 일본식 정원이 딸린 요지야 카페에서 말차 카푸치노.',
+            wifePoint: '예쁜 캐릭터 얼굴이 그려진 말차 카푸치노와 평화로운 다다미방 정원 뷰!',
+            coupleTip: '물소리를 들으며 천천히 손잡고 걷기 가장 좋은 교토 최고의 산책로.',
+            done: false
+          },
+          {
+            id: 'c3-d2-5',
+            time: '19:00',
+            text: '교토역 포르타 지하상가 맛집 거리 만찬',
+            tag: 'cafe',
+            tagLabel: '🍲 교토 미식',
+            desc: '교토역 지하 포르타에서 맛보는 바삭한 돈카츠 정식 또는 교토식 오코노미야키.',
+            wifePoint: '웨이팅이 길지 않고 쾌적하게 맛있는 저녁 식사 즐기기.',
+            coupleTip: '식사 후 주조 호텔까지 전철로 3분 만에 이동 가능.',
+            done: false
+          }
+        ]
+      },
+      3: {
+        title: 'Day 3: 아라시야마 대나무숲 & 전통 죽공예품/자수 공방',
+        desc: '아라시야마 치쿠린(대나무숲), 노노미야 신사, 전통 교토 유도후(두부 요리) 런치, 청수사 전통 가옥 거리',
+        hotel: 'Kyoto U-Bell hotel',
+        hotelArea: '교토 주조/교토역 남쪽',
+        hotelNote: '교토 마지막 밤 연박',
+        items: [
+          {
+            id: 'c3-d3-1',
+            time: '09:00',
+            text: '아라시야마 치쿠린(대나무숲) 아침 힐링 산책',
+            tag: 'culture',
+            tagLabel: '🎋 대나무숲',
+            desc: '인파가 덜 붐비는 오전에 방문하여 하늘 높이 뻗은 대나무숲 사이로 불어오는 청량한 바람 만끽.',
+            wifePoint: '바람에 사각거리는 대나무 소리와 싱그러운 초록빛 힐링 인생샷!',
+            coupleTip: '아침 9시대에 도착하면 붐비지 않고 호젓한 숲길을 즐길 수 있습니다.',
+            done: false
+          },
+          {
+            id: 'c3-d3-2',
+            time: '11:30',
+            text: '아라시야마 도월교(도게츠교) & 전통 유도후 런치',
+            tag: 'cafe',
+            tagLabel: '🍲 두부 정식',
+            desc: '오이강을 가로지르는 목조 다리 도게츠교를 감상하고, 부드러운 교토 전통 유도후(탕두부) 코스 즐기기.',
+            wifePoint: '부드럽고 고소한 교토 두부 요리의 깊고 담백한 맛.',
+            coupleTip: '창가에서 강물과 산 풍경이 보이는 자리를 잡으면 금상첨화.',
+            done: false
+          },
+          {
+            id: 'c3-d3-3',
+            time: '14:00',
+            text: '란덴(嵐電) 노면전차 탑승 & 전통 직물·수예 공방',
+            tag: 'transport',
+            tagLabel: '🚋 노면전차',
+            desc: '보라색 레트로 란덴 전철을 타고 이동하며, 아라시야마 역의 유젠(전통 직물 염색) 폴 포토존 감상.',
+            wifePoint: '화려한 유젠 염색 기둥들이 숲을 이룬 란덴역의 환상적인 포토존!',
+            coupleTip: '노면전차가 골목 사이를 누비는 독특한 풍경을 감상해보세요.',
+            done: false
+          },
+          {
+            id: 'c3-d3-4',
+            time: '16:30',
+            text: '기요미즈데라(청수사) & 니넨자카/산넨자카 산책',
+            tag: 'culture',
+            tagLabel: '⛩️ 전통 목조 거리',
+            desc: '절벽 위에 세워진 청수사 무대에서 교토 시내를 조망하고, 옛 가옥이 그대로 보존된 니넨자카/산넨자카 거리 걷기.',
+            wifePoint: '다다미방이 있는 전통 가옥 스타벅스 니넨자카야사카차야점 방문!',
+            coupleTip: '산넨자카 돌계단에서 넘어지지 않게 남편이 손 꼭 잡아주기.',
+            done: false
+          },
+          {
+            id: 'c3-d3-5',
+            time: '19:30',
+            text: '교토 전통 스키야키 만찬 & Kyoto U-Bell hotel',
+            tag: 'cafe',
+            tagLabel: '🍲 스키야키 디너',
+            desc: '교토에서의 마지막 밤을 완벽하게 마무리하는 특상 스키야키 만찬 후 호텔 복귀.',
+            wifePoint: '3일간의 교토 여행을 기념하는 품격 있는 만찬.',
+            coupleTip: '호텔 대욕탕에서 오늘 걸은 피로를 말끔히 풀고 내일 오사카 갈 준비하기.',
+            done: false
+          }
+        ]
+      },
+      4: {
+        title: 'Day 4: 오사카 나카자키초 골목 산책 & 오사카성 공원',
+        desc: '혼마치 The basement hotel 체크인, 나카자키초 옛 골목 공방, 오사카성 천수각, 미나미센바 쇼핑, 피날레 만찬',
+        hotel: 'The basement hotel osaka honmachi',
+        hotelArea: '오사카 혼마치/미나미센바 앞',
+        hotelNote: '혼마치역 15번 출구 도보 3분 · 부티크 라운지',
+        items: [
+          {
+            id: 'c3-d4-1',
+            time: '10:00',
+            text: 'The basement hotel osaka honmachi 체크인 & 짐 보관',
+            tag: 'hotel',
+            tagLabel: '🏨 오사카 숙소',
+            desc: '오사카 혼마치역 도착 후 세련된 The basement hotel에 짐을 맡기고 여유롭게 오사카 일정 시작.',
+            wifePoint: '도심 속 감각적인 부티크 호텔이라 머무는 것만으로도 기분이 좋아요.',
+            coupleTip: '혼마치역은 미도스지선, 주오선, 요츠바시선 3개 노선 환승역이라 어디든 이동 초고속!',
+            done: false
+          },
+          {
+            id: 'c3-d4-2',
+            time: '11:30',
+            text: '나카자키초(中崎町) 레트로 골목 카페 & 핸드메이드 소품',
+            tag: 'yarn',
+            tagLabel: '🧶 감성 골목',
+            desc: '전쟁의 화마를 피한 100년 목조 연립주택 거리. 작은 공방과 숨겨진 카페 골목 산책.',
+            wifePoint: '골목 사이사이 숨어있는 작은 공방과 예쁜 디저트 카페들!',
+            coupleTip: '발길 닿는 골목마다 감성 넘치는 사진 포인트가 가득합니다.',
+            done: false
+          },
+          {
+            id: 'c3-d4-3',
+            time: '14:00',
+            text: '오사카성 천수각 & 고자부네 뱃놀이',
+            tag: 'culture',
+            tagLabel: '🏯 역사 명소',
+            desc: '오사카의 대표 상징 오사카성 천수각을 둘러보고, 해자를 유람하는 황금빛 고자부네 뱃놀이 체험.',
+            wifePoint: '웅장한 성벽과 해자 위에서 배를 타고 올려다보는 성의 위용!',
+            coupleTip: '성 주변 공원 벤치에서 타코야키나 소프트아이스크림 먹으며 휴식.',
+            done: false
+          },
+          {
+            id: 'c3-d4-4',
+            time: '16:30',
+            text: '미나미센바 & 신사이바시 거리 산책 & 기념품 쇼핑',
+            tag: 'vintage',
+            tagLabel: '🛍️ 거리 산책',
+            desc: '호텔 바로 앞 미나미센바의 세련된 카페와 디자이너 숍 둘러보고 필수 기념품 챙기기.',
+            wifePoint: '호텔 코앞이라 쇼핑백을 바로 방에 두고 나올 수 있어 너무 편해요.',
+            coupleTip: '돈키호테나 드럭스토어에서 가족·친구 선물용 과자와 뷰티 제품 알뜰 면세 쇼핑.',
+            done: false
+          },
+          {
+            id: 'c3-d4-5',
+            time: '19:00',
+            text: '마지막 밤 기념 와규 야키니쿠 만찬 & 호텔 라운지',
+            tag: 'cafe',
+            tagLabel: '🥩 피날레 디너',
+            desc: '4일간의 완벽했던 여행을 마무리하는 와규 야키니쿠 만찬과 The basement hotel 라운지 칵테일.',
+            wifePoint: '남편과 함께한 3박 4일 동안의 잊지 못할 추억을 정리하는 달콤한 시간.',
+            coupleTip: '내일 간사이 공항행 열차 시간(혼마치->난바->라피트) 가볍게 확인하고 편안하게 쉬기.',
+            done: false
+          }
+        ]
+      }
+    }
   }
 };
 
@@ -443,6 +1245,13 @@ function initializeApp() {
   try { renderAlbumFeed(); } catch(e) { console.warn('renderAlbumFeed error:', e); }
   try { initCultureGuide(); } catch(e) { console.warn('initCultureGuide error:', e); }
   try { setupEventListeners(); } catch(e) { console.error('setupEventListeners error:', e); }
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetTab = urlParams.get('tab');
+    if (targetTab && ['translate', 'phrases', 'food', 'album', 'plans'].includes(targetTab)) {
+      switchTab(targetTab);
+    }
+  } catch (e) {}
 }
 
 if (document.readyState === 'loading') {
@@ -451,15 +1260,43 @@ if (document.readyState === 'loading') {
   initializeApp();
 }
 
-function initPlans() {
-  if (!state.plans) {
-    state.plans = defaultPlans;
-    savePlans();
+function updateCurrentDayPlansReference() {
+  if (state.customPlans && state.customPlans[state.selectedCourseOption]) {
+    state.plans = state.customPlans[state.selectedCourseOption].days;
   }
 }
 
+function initPlans() {
+  const savedPlans = localStorage.getItem('osaka_custom_plans_v10_2');
+  if (savedPlans) {
+    try {
+      state.customPlans = JSON.parse(savedPlans);
+    } catch (e) {
+      state.customPlans = JSON.parse(JSON.stringify(customItineraries));
+    }
+  } else {
+    // v10.2 신규 부부 맞춤 3대 옵션으로 완벽 초기화
+    state.customPlans = JSON.parse(JSON.stringify(customItineraries));
+    savePlans();
+  }
+
+  // 선택된 코스 번호 복원 (1, 2, 3)
+  const savedCourse = parseInt(localStorage.getItem('osaka_selected_course') || '1', 10);
+  state.selectedCourseOption = (savedCourse >= 1 && savedCourse <= 3) ? savedCourse : 1;
+  state.selectedDay = 1;
+
+  updateCurrentDayPlansReference();
+}
+
 function savePlans() {
-  localStorage.setItem('osaka_plans_v1', JSON.stringify(state.plans));
+  if (state.customPlans) {
+    localStorage.setItem('osaka_custom_plans_v10_2', JSON.stringify(state.customPlans));
+  }
+  localStorage.setItem('osaka_selected_course', state.selectedCourseOption);
+  // 하위 호환
+  if (state.plans) {
+    localStorage.setItem('osaka_plans_v1', JSON.stringify(state.plans));
+  }
 }
 
 function initVoices() {
@@ -1799,41 +2636,157 @@ function renderPhrases() {
 }
 
 function renderPlans() {
+  updateCurrentDayPlansReference();
+  if (!state.plans) return;
+
+  const currentCourseData = state.customPlans ? state.customPlans[state.selectedCourseOption] : null;
   const currentDayData = state.plans[state.selectedDay];
   if (!currentDayData) return;
 
+  // 1. 3대 코스 옵션 버튼 active 상태 동기화
+  document.querySelectorAll('.course-option-btn').forEach(btn => {
+    const courseNum = parseInt(btn.dataset.course, 10);
+    if (courseNum === state.selectedCourseOption) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+
+  // 2. 4일차 버튼 active 상태 동기화
+  document.querySelectorAll('.day-btn').forEach(btn => {
+    const dayNum = parseInt(btn.dataset.day, 10);
+    if (dayNum === state.selectedDay) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+
+  // 3. 일차 인디케이터 라벨
+  const indicatorEl = document.getElementById('day-active-indicator');
+  if (indicatorEl) {
+    indicatorEl.innerText = `Day ${state.selectedDay} 일정 확인 중`;
+  }
+
+  // 4. 호텔 연동 카드 하이라이트 (Day 1~3은 교토 숙소, Day 4는 오사카 숙소)
+  const kyotoHotelCard = document.getElementById('hotel-card-kyoto');
+  const osakaHotelCard = document.getElementById('hotel-card-osaka');
+  if (kyotoHotelCard && osakaHotelCard) {
+    if (state.selectedDay <= 3) {
+      kyotoHotelCard.classList.add('active-day-hotel');
+      osakaHotelCard.classList.remove('active-day-hotel');
+    } else {
+      kyotoHotelCard.classList.remove('active-day-hotel');
+      osakaHotelCard.classList.add('active-day-hotel');
+    }
+  }
+
+  // 5. 헤더 카드 업데이트
   const titleEl = document.getElementById('day-header-title');
   const descEl = document.getElementById('day-header-desc');
-  const listEl = document.getElementById('plan-items-list');
+  const hotelPillEl = document.getElementById('day-hotel-pill');
 
   if (titleEl) titleEl.innerHTML = `<span>🗓️</span> ${escapeHtml(currentDayData.title)}`;
   if (descEl) descEl.innerText = currentDayData.desc;
+  if (hotelPillEl) {
+    hotelPillEl.innerText = `🏨 ${currentDayData.hotel || (state.selectedDay <= 3 ? 'Kyoto U-Bell hotel' : 'The basement hotel')}`;
+  }
 
+  // 6. 스팟 리스트 렌더링
+  const listEl = document.getElementById('plan-items-list');
   if (listEl) {
-    if (currentDayData.items.length === 0) {
-      listEl.innerHTML = '<div style="text-align: center; color: #94A3B8; padding: 20px;">등록된 일정이 없습니다. 아래에서 추가해보세요!</div>';
+    if (!currentDayData.items || currentDayData.items.length === 0) {
+      listEl.innerHTML = '<div style="text-align: center; color: #94A3B8; padding: 24px; background: #FFF; border-radius: 12px; border: 1px dashed #CBD5E1;">등록된 일정이 없습니다. 아래에서 둘만의 스팟을 추가해보세요!</div>';
       return;
     }
 
-    listEl.innerHTML = currentDayData.items.map(item => `
-      <div class="plan-item ${item.done ? 'done' : ''}">
-        <div class="plan-left">
-          <input type="checkbox" class="plan-checkbox" ${item.done ? 'checked' : ''} onchange="togglePlanDone('${item.id}')">
-          <div>
-            <div class="plan-name">${escapeHtml(item.text)}</div>
-            ${item.note ? `<div class="plan-note">${escapeHtml(item.note)}</div>` : ''}
+    listEl.innerHTML = currentDayData.items.map(item => {
+      const tagClass = item.tag ? `tag-${item.tag}` : 'tag-cafe';
+      const tagLabel = item.tagLabel || (item.tag === 'yarn' ? '🧶 뜨개/공방' : item.tag === 'book' ? '📚 감성서점' : item.tag === 'vintage' ? '👗 빈티지' : item.tag === 'hotel' ? '🏨 연계숙소' : item.tag === 'culture' ? '⛩️ 전통문화' : '☕ 카페/미식');
+
+      return `
+        <div class="plan-item ${item.done ? 'done' : ''}" data-id="${item.id}">
+          <div class="plan-main-row">
+            <div class="plan-left">
+              <div class="plan-checkbox-wrap">
+                <input 
+                  type="checkbox" 
+                  class="plan-checkbox" 
+                  ${item.done ? 'checked' : ''} 
+                  onchange="togglePlanDone('${item.id}')"
+                  aria-label="일정 완료 체크"
+                >
+              </div>
+              <div class="plan-content-wrap">
+                <div class="plan-header-line">
+                  ${item.time ? `<span class="plan-time-badge">${escapeHtml(item.time)}</span>` : ''}
+                  <span class="plan-tag ${tagClass}">${tagLabel}</span>
+                </div>
+                <div class="plan-name">${escapeHtml(item.text)}</div>
+                ${item.desc ? `<div class="plan-desc">${escapeHtml(item.desc)}</div>` : ''}
+              </div>
+            </div>
+            <button 
+              type="button" 
+              class="icon-btn" 
+              onclick="deletePlan('${item.id}')" 
+              title="삭제" 
+              style="color: #94A3B8; border: none; background: transparent; padding: 4px; cursor: pointer; font-size: 15px;"
+            >
+              🗑️
+            </button>
           </div>
+
+          ${(item.wifePoint || item.coupleTip) ? `
+            <div class="plan-extra-details">
+              ${item.wifePoint ? `
+                <div class="wife-pick-box">
+                  <span class="label">💖 아내 취향:</span>
+                  <span>${escapeHtml(item.wifePoint)}</span>
+                </div>
+              ` : ''}
+              ${item.coupleTip ? `
+                <div class="couple-tip-box">
+                  <span class="label">💡 부부 동행 팁:</span>
+                  <span>${escapeHtml(item.coupleTip)}</span>
+                </div>
+              ` : ''}
+            </div>
+          ` : ''}
         </div>
-        <button class="icon-btn" onclick="deletePlan('${item.id}')" title="삭제" style="color: #94A3B8; border: none; background: transparent; padding: 4px;">
-          🗑️
-        </button>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   }
 }
 
+window.switchCourseOption = (courseNum) => {
+  const num = parseInt(courseNum, 10);
+  if (num < 1 || num > 3) return;
+  state.selectedCourseOption = num;
+  savePlans();
+  renderPlans();
+  const courseNames = {
+    1: '🧶 감성 예술 & 공방·뜨개질 힐링형',
+    2: '👗 트렌디 패션 & 빈티지 쇼핑 집중형',
+    3: '⛩️ 전통 문화 + 취향 스팟 밸런스형'
+  };
+  showToast(`${courseNames[num] || '선택 코스'}로 일정이 변경되었습니다! 💖`);
+};
+
+window.resetCurrentCourse = () => {
+  if (confirm('현재 코스의 일정을 둘만의 추천 원본 상태로 초기화하시겠습니까?')) {
+    state.customPlans[state.selectedCourseOption] = JSON.parse(JSON.stringify(customItineraries[state.selectedCourseOption]));
+    savePlans();
+    renderPlans();
+    showToast('추천 일정 원본으로 깨끗하게 복원되었습니다! 🔄');
+  }
+};
+
 window.togglePlanDone = (id) => {
+  updateCurrentDayPlansReference();
   const dayData = state.plans[state.selectedDay];
+  if (!dayData || !dayData.items) return;
   const targetItem = dayData.items.find(it => it.id === id);
   if (targetItem) {
     targetItem.done = !targetItem.done;
@@ -1848,26 +2801,39 @@ function addNewPlan() {
   const text = input ? input.value.trim() : '';
 
   if (!text) {
-    showToast('추가할 일정 내용을 입력해주세요.');
+    showToast('추가할 장소나 일정 내용을 입력해주세요.');
     return;
   }
 
+  updateCurrentDayPlansReference();
   const dayData = state.plans[state.selectedDay];
+  if (!dayData || !dayData.items) return;
+
+  const now = new Date();
+  const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
   dayData.items.push({
-    id: `${state.selectedDay}-${Date.now()}`,
+    id: `custom-${state.selectedCourseOption}-${state.selectedDay}-${Date.now()}`,
+    time: timeStr,
     text: text,
-    note: '내가 추가한 여행 계획',
+    tag: 'cafe',
+    tagLabel: '📌 추가 스팟',
+    desc: '우리 부부가 직접 추가한 소중한 여행 일정',
+    wifePoint: '둘만의 특별한 취향이 담긴 장소!',
+    coupleTip: '함께 사진 찍고 좋은 추억 만들기',
     done: false
   });
 
   savePlans();
-  input.value = '';
+  if (input) input.value = '';
   renderPlans();
-  showToast('새 일정이 추가되었습니다! 📌');
+  showToast('새 스팟이 일정에 추가되었습니다! 📌');
 }
 
 window.deletePlan = (id) => {
+  updateCurrentDayPlansReference();
   const dayData = state.plans[state.selectedDay];
+  if (!dayData || !dayData.items) return;
   dayData.items = dayData.items.filter(it => it.id !== id);
   savePlans();
   renderPlans();
@@ -4821,6 +5787,26 @@ function setupEventListeners() {
       renderPhrases();
     });
   });
+
+  // 맞춤 코스 3대 옵션 버튼 클릭
+  document.querySelectorAll('.course-option-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const courseNum = parseInt(btn.dataset.course, 10);
+      if (typeof window.switchCourseOption === 'function') {
+        window.switchCourseOption(courseNum);
+      }
+    });
+  });
+
+  // 코스 초기화 버튼
+  const courseResetBtn = document.getElementById('course-reset-btn');
+  if (courseResetBtn) {
+    courseResetBtn.addEventListener('click', () => {
+      if (typeof window.resetCurrentCourse === 'function') {
+        window.resetCurrentCourse();
+      }
+    });
+  }
 
   // 일정 일차 선택
   document.querySelectorAll('.day-btn').forEach(btn => {
